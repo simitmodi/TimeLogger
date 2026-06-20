@@ -16,13 +16,19 @@ public class SessionRecord {
     private final LocalDateTime startTime;
     private final LocalDateTime endTime;
     private final long durationSeconds;
+    private final String description;
 
     public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds) {
+        this(type, subject, startTime, endTime, durationSeconds, "");
+    }
+
+    public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds, String description) {
         this.type = type;
         this.subject = subject;
         this.startTime = startTime;
         this.endTime = endTime;
         this.durationSeconds = durationSeconds;
+        this.description = description;
     }
 
     public SessionType getType() {
@@ -45,13 +51,18 @@ public class SessionRecord {
         return durationSeconds;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
     public String toStorageLine() {
         return String.join("|",
             type.name(),
             sanitize(subject),
             startTime.format(DATE_FORMAT),
             endTime.format(DATE_FORMAT),
-            String.valueOf(durationSeconds)
+            String.valueOf(durationSeconds),
+            sanitize(description)
         );
     }
 
@@ -66,8 +77,9 @@ public class SessionRecord {
         LocalDateTime start = LocalDateTime.parse(parts[2], DATE_FORMAT);
         LocalDateTime end = LocalDateTime.parse(parts[3], DATE_FORMAT);
         long duration = Long.parseLong(parts[4]);
+        String description = parts.length > 5 ? parts[5] : "";
 
-        return new SessionRecord(type, subject, start, end, duration);
+        return new SessionRecord(type, subject, start, end, duration, description);
     }
 
     private static String sanitize(String value) {

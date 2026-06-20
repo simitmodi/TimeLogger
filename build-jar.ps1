@@ -34,6 +34,18 @@ if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed"
 }
 
+# Copy resource assets (non-java files) to class files directory
+Get-ChildItem -Path (Join-Path $root "src\main\java") -Recurse -File | Where-Object { $_.Extension -ne ".java" } | ForEach-Object {
+    $srcPrefix = Join-Path $root "src\main\java"
+    $relative = $_.FullName.Substring($srcPrefix.Length + 1)
+    $dest = Join-Path $outDir $relative
+    $destParent = Split-Path -Parent $dest
+    if (-not (Test-Path $destParent)) {
+        New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+    }
+    Copy-Item -Path $_.FullName -Destination $dest -Force
+}
+
 $jarPath = Join-Path $distDir "time-logger.jar"
 if (Test-Path $jarPath) {
     Remove-Item -Force $jarPath

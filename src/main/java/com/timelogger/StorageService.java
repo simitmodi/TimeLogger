@@ -102,6 +102,18 @@ public class StorageService {
         }
     }
 
+    public void saveSessions(List<SessionRecord> sessions) {
+        List<String> lines = sessions.stream()
+            .map(SessionRecord::toStorageLine)
+            .collect(Collectors.toList());
+        try {
+            Files.write(sessionsFile, lines, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save sessions", e);
+        }
+    }
+
     private void initialize() {
         try {
             Files.createDirectories(appDirectory);

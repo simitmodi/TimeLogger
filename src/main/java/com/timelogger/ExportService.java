@@ -40,7 +40,7 @@ public class ExportService {
         int rowIndex = 1;
 
         appendHeaderRow(rows, rowIndex++, List.of(
-            "Type", "Subject", "Start Time", "End Time", "Duration (sec)", "Duration (hh:mm:ss)"
+            "Type", "Subject", "Activity", "Start Time", "End Time", "Duration (sec)", "Duration (hh:mm:ss)"
         ));
 
         List<SessionRecord> sorted = sessions.stream()
@@ -51,10 +51,11 @@ public class ExportService {
             rows.append("<row r=\"").append(rowIndex).append("\">")
                 .append(textCell(1, rowIndex, session.getType().name(), false))
                 .append(textCell(2, rowIndex, session.getSubject(), false))
-                .append(textCell(3, rowIndex, session.getStartTime().format(DATE_TIME_FORMAT), false))
-                .append(textCell(4, rowIndex, session.getEndTime().format(DATE_TIME_FORMAT), false))
-                .append(numberCell(5, rowIndex, session.getDurationSeconds(), false))
-                .append(textCell(6, rowIndex, formatDuration(session.getDurationSeconds()), false))
+                .append(textCell(3, rowIndex, session.getDescription(), false))
+                .append(textCell(4, rowIndex, session.getStartTime().format(DATE_TIME_FORMAT), false))
+                .append(textCell(5, rowIndex, session.getEndTime().format(DATE_TIME_FORMAT), false))
+                .append(numberCell(6, rowIndex, session.getDurationSeconds(), false))
+                .append(textCell(7, rowIndex, formatDuration(session.getDurationSeconds()), false))
                 .append("</row>");
             rowIndex++;
         }
