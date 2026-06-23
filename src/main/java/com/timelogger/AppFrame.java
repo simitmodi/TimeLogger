@@ -138,6 +138,7 @@ public class AppFrame extends JFrame {
         }
     };
     private final PieChartPanel subjectPieChart = new PieChartPanel();
+    private final HeatmapPanel heatmapPanel = new HeatmapPanel();
 
     private final JComboBox<String> analysisPeriodCombo = new JComboBox<>(new String[]{
         "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days"
@@ -716,10 +717,18 @@ public class AppFrame extends JFrame {
         refreshBtn.addActionListener(e -> refreshAnalysis());
         bottomPanel.add(refreshBtn);
 
+        JPanel heatmapCard = new JPanel(new BorderLayout(8, 8));
+        heatmapCard.setBorder(BorderFactory.createTitledBorder("Activity Heatmap (Last 60 Days)"));
+        JPanel centerWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        centerWrapper.setOpaque(false);
+        centerWrapper.add(heatmapPanel);
+        heatmapCard.add(centerWrapper, BorderLayout.CENTER);
+
         JPanel mainContent = new JPanel(new BorderLayout(16, 16));
         mainContent.setOpaque(false);
         mainContent.add(summaryPanel, BorderLayout.NORTH);
         mainContent.add(breakdownPanel, BorderLayout.CENTER);
+        mainContent.add(heatmapCard, BorderLayout.SOUTH);
 
         panel.add(filterBar, BorderLayout.NORTH);
         panel.add(mainContent, BorderLayout.CENTER);
@@ -900,6 +909,16 @@ public class AppFrame extends JFrame {
                 formatDuration(sec)
             });
         }
+
+        // Heatmap update (always last 60 days)
+        LocalDate heatmapStart = today.minusDays(60);
+        java.util.Map<LocalDate, Long> dailyDurations = rawSessions.stream()
+            .filter(s -> !s.getStartTime().toLocalDate().isBefore(heatmapStart))
+            .collect(Collectors.groupingBy(
+                s -> s.getStartTime().toLocalDate(),
+                Collectors.summingLong(SessionRecord::getDurationSeconds)
+            ));
+        heatmapPanel.setData(dailyDurations);
     }
 
     public void startStopwatch() {
