@@ -154,9 +154,7 @@ public class AppFrame extends JFrame {
     public AppFrame() {
         setTitle("Time Logger");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(450, 500));
-        setPreferredSize(new Dimension(1000, 700));
-        setSize(new Dimension(1000, 700));
+        setMinimumSize(new Dimension(980, 680));
         setLocationRelativeTo(null);
 
         // Set window icon
@@ -254,49 +252,11 @@ public class AppFrame extends JFrame {
         stopwatchSubjectLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
 
         JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
-        JPanel config = new JPanel();
-        final boolean[] isStopwatchWide = {true};
-        config.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                int width = config.getWidth();
-                boolean wide = width >= 750;
-                if (wide != isStopwatchWide[0] || config.getComponentCount() == 0) {
-                    isStopwatchWide[0] = wide;
-                    config.removeAll();
-                    if (wide) {
-                        config.setLayout(new FlowLayout(FlowLayout.CENTER, 12, 8));
-                        config.add(new JLabel("Subject"));
-                        config.add(stopwatchSubjectCombo);
-                        config.add(new JLabel("Activity Type"));
-                        config.add(stopwatchActivityTypeCombo);
-                        config.add(stopwatchActivitySubPanel);
-                    } else {
-                        config.setLayout(new java.awt.GridLayout(0, 1, 4, 4));
-                        
-                        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-                        row1.setOpaque(false);
-                        row1.add(new JLabel("Subject"));
-                        row1.add(stopwatchSubjectCombo);
-                        
-                        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-                        row2.setOpaque(false);
-                        row2.add(new JLabel("Activity Type"));
-                        row2.add(stopwatchActivityTypeCombo);
-                        
-                        JPanel row3 = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-                        row3.setOpaque(false);
-                        row3.add(stopwatchActivitySubPanel);
-                        
-                        config.add(row1);
-                        config.add(row2);
-                        config.add(row3);
-                    }
-                    config.revalidate();
-                    config.repaint();
-                }
-            }
-        });
+        JPanel config = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        config.add(new JLabel("Subject"));
+        config.add(stopwatchSubjectCombo);
+        config.add(new JLabel("Activity Type"));
+        config.add(stopwatchActivityTypeCombo);
 
         JPanel generalCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         generalCard.add(new JLabel("Desc: "));
@@ -323,6 +283,8 @@ public class AppFrame extends JFrame {
             String selected = (String) stopwatchActivityTypeCombo.getSelectedItem();
             cardLayout.show(stopwatchActivitySubPanel, selected);
         });
+
+        config.add(stopwatchActivitySubPanel);
 
         centerPanel.add(stopwatchSubjectLabel, BorderLayout.NORTH);
         centerPanel.add(stopwatchTimeLabel, BorderLayout.CENTER);
@@ -380,51 +342,15 @@ public class AppFrame extends JFrame {
 
         timerTimeLabel.setFont(new Font("Monospaced", Font.BOLD, 64));
 
-        JPanel config = new JPanel();
-        final boolean[] isTimerWide = {true};
-        config.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                int width = config.getWidth();
-                boolean wide = width >= 750;
-                if (wide != isTimerWide[0] || config.getComponentCount() == 0) {
-                    isTimerWide[0] = wide;
-                    config.removeAll();
-                    if (wide) {
-                        config.setLayout(new FlowLayout(FlowLayout.CENTER, 12, 8));
-                        config.add(new JLabel("Hours"));
-                        config.add(hoursSpinner);
-                        config.add(new JLabel("Minutes"));
-                        config.add(minutesSpinner);
-                        config.add(new JLabel("Seconds"));
-                        config.add(secondsSpinner);
-                        config.add(new JLabel("Subject"));
-                        config.add(timerSubjectCombo);
-                    } else {
-                        config.setLayout(new java.awt.GridLayout(0, 1, 4, 4));
-                        
-                        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-                        row1.setOpaque(false);
-                        row1.add(new JLabel("Hours"));
-                        row1.add(hoursSpinner);
-                        row1.add(new JLabel("Minutes"));
-                        row1.add(minutesSpinner);
-                        row1.add(new JLabel("Seconds"));
-                        row1.add(secondsSpinner);
-                        
-                        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-                        row2.setOpaque(false);
-                        row2.add(new JLabel("Subject"));
-                        row2.add(timerSubjectCombo);
-                        
-                        config.add(row1);
-                        config.add(row2);
-                    }
-                    config.revalidate();
-                    config.repaint();
-                }
-            }
-        });
+        JPanel config = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        config.add(new JLabel("Hours"));
+        config.add(hoursSpinner);
+        config.add(new JLabel("Minutes"));
+        config.add(minutesSpinner);
+        config.add(new JLabel("Seconds"));
+        config.add(secondsSpinner);
+        config.add(new JLabel("Subject"));
+        config.add(timerSubjectCombo);
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 10));
         timerStartButton.addActionListener(e -> startTimer());
@@ -473,6 +399,15 @@ public class AppFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(12, 12));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
+        // Filter Bar
+        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        filterBar.add(new JLabel("Subject:"));
+        filterBar.add(logsSubjectFilterCombo);
+        filterBar.add(new JLabel("Mode:"));
+        filterBar.add(logsModeFilterCombo);
+        filterBar.add(new JLabel("Search Activity:"));
+        filterBar.add(logsSearchField);
+
         ModernButton clearFiltersBtn = new ModernButton("Clear Filters");
         clearFiltersBtn.addActionListener(e -> {
             logsSubjectFilterCombo.setSelectedIndex(0);
@@ -484,51 +419,7 @@ public class AppFrame extends JFrame {
             }
             refreshSessionsTable();
         });
-
-        // Filter Bar
-        JPanel filterBar = new JPanel();
-        final boolean[] isLogsFilterWide = {true};
-        filterBar.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                int width = filterBar.getWidth();
-                boolean wide = width >= 780;
-                if (wide != isLogsFilterWide[0] || filterBar.getComponentCount() == 0) {
-                    isLogsFilterWide[0] = wide;
-                    filterBar.removeAll();
-                    if (wide) {
-                        filterBar.setLayout(new FlowLayout(FlowLayout.LEFT, 12, 4));
-                        filterBar.add(new JLabel("Subject:"));
-                        filterBar.add(logsSubjectFilterCombo);
-                        filterBar.add(new JLabel("Mode:"));
-                        filterBar.add(logsModeFilterCombo);
-                        filterBar.add(new JLabel("Search Activity:"));
-                        filterBar.add(logsSearchField);
-                        filterBar.add(clearFiltersBtn);
-                    } else {
-                        filterBar.setLayout(new java.awt.GridLayout(0, 1, 4, 4));
-                        
-                        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-                        row1.setOpaque(false);
-                        row1.add(new JLabel("Subject:"));
-                        row1.add(logsSubjectFilterCombo);
-                        row1.add(new JLabel("Mode:"));
-                        row1.add(logsModeFilterCombo);
-                        
-                        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-                        row2.setOpaque(false);
-                        row2.add(new JLabel("Search Activity:"));
-                        row2.add(logsSearchField);
-                        row2.add(clearFiltersBtn);
-                        
-                        filterBar.add(row1);
-                        filterBar.add(row2);
-                    }
-                    filterBar.revalidate();
-                    filterBar.repaint();
-                }
-            }
-        });
+        filterBar.add(clearFiltersBtn);
 
         // Add action listeners to trigger table refresh
         logsSubjectFilterCombo.addActionListener(e -> refreshSessionsTable());
@@ -736,9 +627,6 @@ public class AppFrame extends JFrame {
         analysisPeriodCombo.addActionListener(e -> refreshAnalysis());
 
         // Top Summary Panel
-        JPanel summaryPanel = new JPanel(new java.awt.GridLayout(1, 4, 20, 20));
-        summaryPanel.setName("summaryPanel");
-        
         JPanel goalCard = new JPanel(new java.awt.GridLayout(3, 1, 4, 4));
         goalCard.setBorder(BorderFactory.createTitledBorder("Daily Goal & Streaks"));
 
@@ -780,49 +668,41 @@ public class AppFrame extends JFrame {
         chartCard.setBorder(BorderFactory.createTitledBorder("Subject Distribution"));
         chartCard.add(subjectPieChart, BorderLayout.CENTER);
 
-        summaryPanel.add(goalCard);
-        summaryPanel.add(sessionsCard);
-        summaryPanel.add(durationCard);
-        summaryPanel.add(chartCard);
-
-        // Center Breakdown Tables Panel
-        JPanel breakdownPanel = new JPanel(new java.awt.GridLayout(1, 3, 20, 20));
-
         JTable subjectTable = new JTable(subjectAnalysisModel);
         subjectTable.setRowHeight(24);
-        subjectTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 150));
         JPanel subjectCard = new JPanel(new BorderLayout(8, 8));
         subjectCard.setBorder(BorderFactory.createTitledBorder("By Subject"));
-        subjectCard.add(new JScrollPane(subjectTable), BorderLayout.CENTER);
+        JScrollPane subjectScroll = new JScrollPane(subjectTable);
+        subjectScroll.setPreferredSize(new Dimension(200, 300));
+        subjectCard.add(subjectScroll, BorderLayout.CENTER);
 
         JTable chapterTable = new JTable(chapterAnalysisModel);
         chapterTable.setRowHeight(24);
-        chapterTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 150));
         JPanel chapterCard = new JPanel(new BorderLayout(8, 8));
         chapterCard.setBorder(BorderFactory.createTitledBorder("By Chapter in Subject"));
-        chapterCard.add(new JScrollPane(chapterTable), BorderLayout.CENTER);
+        JScrollPane chapterScroll = new JScrollPane(chapterTable);
+        chapterScroll.setPreferredSize(new Dimension(200, 300));
+        chapterCard.add(chapterScroll, BorderLayout.CENTER);
 
         JTable activityTable = new JTable(activityAnalysisModel);
         activityTable.setRowHeight(24);
-        activityTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 120));
         JPanel activityCard = new JPanel(new BorderLayout(8, 8));
         activityCard.setBorder(BorderFactory.createTitledBorder("By Activity"));
-        activityCard.add(new JScrollPane(activityTable), BorderLayout.CENTER);
+        JScrollPane activityScroll = new JScrollPane(activityTable);
+        activityScroll.setPreferredSize(new Dimension(200, 140));
+        activityCard.add(activityScroll, BorderLayout.CENTER);
 
         JTable dayOfWeekTable = new JTable(dayOfWeekAnalysisModel);
         dayOfWeekTable.setRowHeight(24);
-        dayOfWeekTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 180));
         JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
         dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week"));
-        dayOfWeekCard.add(new JScrollPane(dayOfWeekTable), BorderLayout.CENTER);
+        JScrollPane dayOfWeekScroll = new JScrollPane(dayOfWeekTable);
+        dayOfWeekScroll.setPreferredSize(new Dimension(200, 180));
+        dayOfWeekCard.add(dayOfWeekScroll, BorderLayout.CENTER);
 
-        JPanel rightColPanel = new JPanel(new java.awt.GridLayout(2, 1, 0, 20));
-        rightColPanel.add(activityCard);
-        rightColPanel.add(dayOfWeekCard);
-
-        breakdownPanel.add(subjectCard);
-        breakdownPanel.add(chapterCard);
-        breakdownPanel.add(rightColPanel);
+        JPanel heatmapCard = new JPanel(new BorderLayout(8, 8));
+        heatmapCard.setBorder(BorderFactory.createTitledBorder("Activity Heatmap"));
+        heatmapCard.add(heatmapPanel, BorderLayout.CENTER);
 
         // Bottom Controls
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -830,100 +710,57 @@ public class AppFrame extends JFrame {
         refreshBtn.addActionListener(e -> refreshAnalysis());
         bottomPanel.add(refreshBtn);
 
-        JPanel heatmapCard = new JPanel(new BorderLayout(8, 8));
-        heatmapCard.setBorder(BorderFactory.createTitledBorder("Activity Heatmap (Last 60 Days)"));
-        JPanel centerWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        centerWrapper.setOpaque(false);
-        centerWrapper.add(heatmapPanel);
-        heatmapCard.add(centerWrapper, BorderLayout.CENTER);
-
-        JPanel mainContent = new JPanel(new BorderLayout(16, 16));
+        // Bento Box Layout Setup using GridBagLayout
+        JPanel mainContent = new JPanel(new GridBagLayout());
         mainContent.setOpaque(false);
-        mainContent.add(summaryPanel, BorderLayout.NORTH);
-        mainContent.add(breakdownPanel, BorderLayout.CENTER);
-        mainContent.add(heatmapCard, BorderLayout.SOUTH);
+        mainContent.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
-        final int[] lastSummaryCols = {-1};
-        final int[] lastBreakdownCols = {-1};
-        mainContent.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                int width = mainContent.getWidth();
-                if (width <= 0) return; // Ignore initial unmeasured state
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new java.awt.Insets(8, 8, 8, 8);
 
-                int summaryCols, summaryRows;
-                int breakdownCols, breakdownRows;
+        // Row 0: Goal, Sessions, Duration (all 1x1)
+        gbc.gridy = 0;
+        gbc.weighty = 0.0;
 
-                if (width >= 950) {
-                    summaryCols = 4; summaryRows = 1;
-                    breakdownCols = 3; breakdownRows = 1;
-                } else if (width >= 700) {
-                    summaryCols = 2; summaryRows = 2;
-                    breakdownCols = 3; breakdownRows = 1;
-                } else {
-                    summaryCols = 1; summaryRows = 0;
-                    breakdownCols = 1; breakdownRows = 0;
-                }
+        gbc.gridx = 0; gbc.gridwidth = 1; gbc.gridheight = 1; gbc.weightx = 1.0;
+        mainContent.add(goalCard, gbc);
 
-                boolean changed = false;
-                if (summaryCols != lastSummaryCols[0]) {
-                    lastSummaryCols[0] = summaryCols;
-                    if (summaryCols == 1) {
-                        summaryPanel.setLayout(new java.awt.GridBagLayout());
-                        java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
-                        gbc.gridx = 0;
-                        gbc.gridy = java.awt.GridBagConstraints.RELATIVE;
-                        gbc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-                        gbc.weightx = 1.0;
-                        gbc.insets = new java.awt.Insets(0, 0, 16, 0);
+        gbc.gridx = 1; gbc.gridwidth = 1; gbc.gridheight = 1; gbc.weightx = 1.0;
+        mainContent.add(sessionsCard, gbc);
 
-                        summaryPanel.removeAll();
-                        summaryPanel.add(goalCard, gbc);
-                        summaryPanel.add(sessionsCard, gbc);
-                        summaryPanel.add(durationCard, gbc);
-                        summaryPanel.add(chartCard, gbc);
-                    } else {
-                        summaryPanel.setLayout(new java.awt.GridLayout(summaryRows, summaryCols, 16, 16));
-                        summaryPanel.removeAll();
-                        summaryPanel.add(goalCard);
-                        summaryPanel.add(sessionsCard);
-                        summaryPanel.add(durationCard);
-                        summaryPanel.add(chartCard);
-                    }
-                    changed = true;
-                }
-                if (breakdownCols != lastBreakdownCols[0]) {
-                    lastBreakdownCols[0] = breakdownCols;
-                    if (breakdownCols == 1) {
-                        breakdownPanel.setLayout(new java.awt.GridBagLayout());
-                        java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
-                        gbc.gridx = 0;
-                        gbc.gridy = java.awt.GridBagConstraints.RELATIVE;
-                        gbc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-                        gbc.weightx = 1.0;
-                        gbc.insets = new java.awt.Insets(0, 0, 20, 0);
+        gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 1; gbc.weightx = 1.0;
+        mainContent.add(durationCard, gbc);
 
-                        breakdownPanel.removeAll();
-                        breakdownPanel.add(subjectCard, gbc);
-                        breakdownPanel.add(chapterCard, gbc);
-                        breakdownPanel.add(rightColPanel, gbc);
-                    } else {
-                        breakdownPanel.setLayout(new java.awt.GridLayout(breakdownRows, breakdownCols, 20, 20));
-                        breakdownPanel.removeAll();
-                        breakdownPanel.add(subjectCard);
-                        breakdownPanel.add(chapterCard);
-                        breakdownPanel.add(rightColPanel);
-                    }
-                    changed = true;
-                }
+        // Row 1: Pie Chart (starts Col 0, spans 1 Col and 2 Rows)
+        gbc.gridy = 1;
+        gbc.gridx = 0; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        mainContent.add(chartCard, gbc);
 
-                if (changed) {
-                    mainContent.revalidate();
-                    mainContent.repaint();
-                }
-            }
-        });
+        // Row 1: By Subject (starts Col 1, spans 1 Col and 2 Rows)
+        gbc.gridx = 1; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        mainContent.add(subjectCard, gbc);
 
+        // Row 1: By Chapter (starts Col 2, spans 1 Col and 2 Rows)
+        gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        mainContent.add(chapterCard, gbc);
+
+        // Row 3: By Activity (Wide card: Col 0 & 1, spans 2 Cols and 1 Row)
+        gbc.gridy = 3; gbc.gridheight = 1; gbc.weighty = 0.5;
+        
+        gbc.gridx = 0; gbc.gridwidth = 2; gbc.weightx = 2.0;
+        mainContent.add(activityCard, gbc);
+
+        // Row 3: By Day of Week (Col 2, spans 1 Col and 1 Row)
+        gbc.gridx = 2; gbc.gridwidth = 1; gbc.weightx = 1.0;
+        mainContent.add(dayOfWeekCard, gbc);
+
+        // Row 4: Activity Heatmap (Spans all 3 columns, 1 row)
+        gbc.gridy = 4;
+        gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
+        mainContent.add(heatmapCard, gbc);
+
+        // Wrap the bento grid in a scroll pane to support smaller screens
         JScrollPane scrollPane = new JScrollPane(mainContent);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.setOpaque(false);
@@ -1110,8 +947,8 @@ public class AppFrame extends JFrame {
             });
         }
 
-        // Heatmap update (always last 60 days)
-        LocalDate heatmapStart = today.minusDays(60);
+        // Heatmap update (always last 365 days)
+        LocalDate heatmapStart = today.minusDays(365);
         java.util.Map<LocalDate, Long> dailyDurations = rawSessions.stream()
             .filter(s -> !s.getStartTime().toLocalDate().isBefore(heatmapStart))
             .collect(Collectors.groupingBy(

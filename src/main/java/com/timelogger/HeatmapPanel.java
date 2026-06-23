@@ -20,9 +20,7 @@ public class HeatmapPanel extends JPanel {
     private Map<LocalDate, Long> dailyDurations = new HashMap<>();
 
     public HeatmapPanel() {
-        setPreferredSize(new Dimension(280, 190));
-        setMinimumSize(new Dimension(280, 190));
-        setMaximumSize(new Dimension(280, 190));
+        setPreferredSize(new Dimension(800, 180));
         setToolTipText(""); // Enables tooltip registration in Swing
 
         addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
@@ -56,10 +54,16 @@ public class HeatmapPanel extends JPanel {
         int topMargin = 25;
         int squareSize = 16;
         int gap = 4;
+        int cellSpace = squareSize + gap;
 
         LocalDate today = LocalDate.now();
-        LocalDate startDate = today.minusDays(60).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-        int numWeeks = (int) ChronoUnit.DAYS.between(startDate, today) / 7 + 1;
+        int availableWidth = getWidth() - leftMargin - 20;
+        int numWeeks = availableWidth / cellSpace;
+        if (numWeeks < 9) {
+            numWeeks = 9;
+        }
+
+        LocalDate startDate = today.minusDays((numWeeks - 1) * 7).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
 
         // 1. Draw Month Labels
         g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
@@ -68,7 +72,7 @@ public class HeatmapPanel extends JPanel {
             LocalDate colStartDate = startDate.plusDays(col * 7);
             String monthName = colStartDate.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault());
             if (!monthName.equals(lastMonthName)) {
-                int x = leftMargin + col * (squareSize + gap);
+                int x = leftMargin + col * cellSpace;
                 g2.setColor(colors.text);
                 g2.drawString(monthName, x, topMargin - 8);
                 lastMonthName = monthName;
@@ -79,7 +83,7 @@ public class HeatmapPanel extends JPanel {
         String[] dayLabels = {"", "Mon", "", "Wed", "", "Fri", ""};
         for (int row = 0; row < 7; row++) {
             if (!dayLabels[row].isEmpty()) {
-                int y = topMargin + row * (squareSize + gap) + squareSize - 4;
+                int y = topMargin + row * cellSpace + squareSize - 4;
                 g2.setColor(colors.text);
                 g2.drawString(dayLabels[row], leftMargin - 30, y);
             }
@@ -93,8 +97,8 @@ public class HeatmapPanel extends JPanel {
                     continue; // Future days are not drawn
                 }
 
-                int x = leftMargin + col * (squareSize + gap);
-                int y = topMargin + row * (squareSize + gap);
+                int x = leftMargin + col * cellSpace;
+                int y = topMargin + row * cellSpace;
 
                 long seconds = dailyDurations.getOrDefault(cellDate, 0L);
                 int level = getDurationLevel(seconds);
@@ -103,9 +107,9 @@ public class HeatmapPanel extends JPanel {
             }
         }
 
-        // 4. Draw Legend
-        int legendY = topMargin + 7 * (squareSize + gap) + 12;
-        int legendXStart = leftMargin + numWeeks * (squareSize + gap) - 110;
+        // 4. Draw Legend (aligned to the right of the grid)
+        int legendY = topMargin + 7 * cellSpace + 12;
+        int legendXStart = leftMargin + numWeeks * cellSpace - 110;
         
         g2.setColor(colors.text);
         g2.drawString("Less", legendXStart - 30, legendY + 11);
@@ -149,15 +153,21 @@ public class HeatmapPanel extends JPanel {
         int topMargin = 25;
         int squareSize = 16;
         int gap = 4;
+        int cellSpace = squareSize + gap;
 
         LocalDate today = LocalDate.now();
-        LocalDate startDate = today.minusDays(60).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-        int numWeeks = (int) ChronoUnit.DAYS.between(startDate, today) / 7 + 1;
+        int availableWidth = getWidth() - leftMargin - 20;
+        int numWeeks = availableWidth / cellSpace;
+        if (numWeeks < 9) {
+            numWeeks = 9;
+        }
+
+        LocalDate startDate = today.minusDays((numWeeks - 1) * 7).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
 
         for (int col = 0; col < numWeeks; col++) {
             for (int row = 0; row < 7; row++) {
-                int x = leftMargin + col * (squareSize + gap);
-                int y = topMargin + row * (squareSize + gap);
+                int x = leftMargin + col * cellSpace;
+                int y = topMargin + row * cellSpace;
 
                 if (mouseX >= x && mouseX < x + squareSize && mouseY >= y && mouseY < y + squareSize) {
                     LocalDate cellDate = startDate.plusDays(col * 7 + row);
