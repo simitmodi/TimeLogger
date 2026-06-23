@@ -155,6 +155,8 @@ public class AppFrame extends JFrame {
         setTitle("Time Logger");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(450, 500));
+        setPreferredSize(new Dimension(1000, 700));
+        setSize(new Dimension(1000, 700));
         setLocationRelativeTo(null);
 
         // Set window icon
@@ -788,24 +790,28 @@ public class AppFrame extends JFrame {
 
         JTable subjectTable = new JTable(subjectAnalysisModel);
         subjectTable.setRowHeight(24);
+        subjectTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 150));
         JPanel subjectCard = new JPanel(new BorderLayout(8, 8));
         subjectCard.setBorder(BorderFactory.createTitledBorder("By Subject"));
         subjectCard.add(new JScrollPane(subjectTable), BorderLayout.CENTER);
 
         JTable chapterTable = new JTable(chapterAnalysisModel);
         chapterTable.setRowHeight(24);
+        chapterTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 150));
         JPanel chapterCard = new JPanel(new BorderLayout(8, 8));
         chapterCard.setBorder(BorderFactory.createTitledBorder("By Chapter in Subject"));
         chapterCard.add(new JScrollPane(chapterTable), BorderLayout.CENTER);
 
         JTable activityTable = new JTable(activityAnalysisModel);
         activityTable.setRowHeight(24);
+        activityTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 120));
         JPanel activityCard = new JPanel(new BorderLayout(8, 8));
         activityCard.setBorder(BorderFactory.createTitledBorder("By Activity"));
         activityCard.add(new JScrollPane(activityTable), BorderLayout.CENTER);
 
         JTable dayOfWeekTable = new JTable(dayOfWeekAnalysisModel);
         dayOfWeekTable.setRowHeight(24);
+        dayOfWeekTable.setPreferredScrollableViewportSize(new java.awt.Dimension(100, 180));
         JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
         dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week"));
         dayOfWeekCard.add(new JScrollPane(dayOfWeekTable), BorderLayout.CENTER);
@@ -862,12 +868,52 @@ public class AppFrame extends JFrame {
                 boolean changed = false;
                 if (summaryCols != lastSummaryCols[0]) {
                     lastSummaryCols[0] = summaryCols;
-                    summaryPanel.setLayout(new java.awt.GridLayout(summaryRows, summaryCols, 16, 16));
+                    if (summaryCols == 1) {
+                        summaryPanel.setLayout(new java.awt.GridBagLayout());
+                        java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
+                        gbc.gridx = 0;
+                        gbc.gridy = java.awt.GridBagConstraints.RELATIVE;
+                        gbc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+                        gbc.weightx = 1.0;
+                        gbc.insets = new java.awt.Insets(0, 0, 16, 0);
+
+                        summaryPanel.removeAll();
+                        summaryPanel.add(goalCard, gbc);
+                        summaryPanel.add(sessionsCard, gbc);
+                        summaryPanel.add(durationCard, gbc);
+                        summaryPanel.add(chartCard, gbc);
+                    } else {
+                        summaryPanel.setLayout(new java.awt.GridLayout(summaryRows, summaryCols, 16, 16));
+                        summaryPanel.removeAll();
+                        summaryPanel.add(goalCard);
+                        summaryPanel.add(sessionsCard);
+                        summaryPanel.add(durationCard);
+                        summaryPanel.add(chartCard);
+                    }
                     changed = true;
                 }
                 if (breakdownCols != lastBreakdownCols[0]) {
                     lastBreakdownCols[0] = breakdownCols;
-                    breakdownPanel.setLayout(new java.awt.GridLayout(breakdownRows, breakdownCols, 20, 20));
+                    if (breakdownCols == 1) {
+                        breakdownPanel.setLayout(new java.awt.GridBagLayout());
+                        java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
+                        gbc.gridx = 0;
+                        gbc.gridy = java.awt.GridBagConstraints.RELATIVE;
+                        gbc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+                        gbc.weightx = 1.0;
+                        gbc.insets = new java.awt.Insets(0, 0, 20, 0);
+
+                        breakdownPanel.removeAll();
+                        breakdownPanel.add(subjectCard, gbc);
+                        breakdownPanel.add(chapterCard, gbc);
+                        breakdownPanel.add(rightColPanel, gbc);
+                    } else {
+                        breakdownPanel.setLayout(new java.awt.GridLayout(breakdownRows, breakdownCols, 20, 20));
+                        breakdownPanel.removeAll();
+                        breakdownPanel.add(subjectCard);
+                        breakdownPanel.add(chapterCard);
+                        breakdownPanel.add(rightColPanel);
+                    }
                     changed = true;
                 }
 
