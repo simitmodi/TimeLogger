@@ -114,6 +114,30 @@ public class StorageService {
         }
     }
 
+    public int loadDailyGoalMinutes() {
+        Path goalFile = appDirectory.resolve("goal.txt");
+        try {
+            if (!Files.exists(goalFile)) {
+                saveDailyGoalMinutes(120); // Default to 120 minutes (2 hours)
+                return 120;
+            }
+            String val = Files.readString(goalFile, StandardCharsets.UTF_8).trim();
+            return Integer.parseInt(val);
+        } catch (Exception e) {
+            return 120;
+        }
+    }
+
+    public void saveDailyGoalMinutes(int minutes) {
+        Path goalFile = appDirectory.resolve("goal.txt");
+        try {
+            Files.writeString(goalFile, String.valueOf(minutes), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save daily goal", e);
+        }
+    }
+
     private void initialize() {
         try {
             Files.createDirectories(appDirectory);

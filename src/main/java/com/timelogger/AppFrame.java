@@ -21,6 +21,7 @@ import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
+import javax.swing.KeyStroke;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -42,11 +43,11 @@ public class AppFrame extends JFrame {
     private final StorageService storageService = new StorageService();
     private final ExportService exportService = new ExportService();
 
-    private final List<String> subjects;
+    final List<String> subjects;
     private final DefaultListModel<String> subjectsListModel = new DefaultListModel<>();
 
     private final DefaultTableModel sessionsTableModel = new DefaultTableModel(
-        new Object[]{"Type", "Subject", "Activity", "Start", "End", "Duration (sec)", "Duration"}, 0) {
+        new Object[]{"Date", "Type", "Subject", "Activity", "Start", "End", "Duration"}, 0) {
         @Override
         public boolean isCellEditable(int row, int column) {
             return false;
@@ -55,19 +56,21 @@ public class AppFrame extends JFrame {
 
     private final JLabel stopwatchTimeLabel = new JLabel("00:00:00", SwingConstants.CENTER);
     private final JLabel stopwatchSubjectLabel = new JLabel("Subject: -", SwingConstants.CENTER);
-    private final JComboBox<String> stopwatchSubjectCombo = new JComboBox<>();
-    private final JComboBox<String> stopwatchActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture"});
-    private final JPanel stopwatchActivitySubPanel = new JPanel(new java.awt.CardLayout());
-    private final JTextField stopwatchActivityField = new JTextField(20);
-    private final JComboBox<String> stopwatchQuestionTypeCombo = new JComboBox<>(new String[]{
+    final JComboBox<String> stopwatchSubjectCombo = new JComboBox<>();
+    final JComboBox<String> stopwatchActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture"});
+    final JPanel stopwatchActivitySubPanel = new JPanel(new java.awt.CardLayout());
+    final JTextField stopwatchActivityField = new JTextField(20);
+    final JComboBox<String> stopwatchQuestionTypeCombo = new JComboBox<>(new String[]{
         "DPP Questions", "Practice Book Questions", "Previous Year Questions"
     });
-    private final JTextField stopwatchChapterField = new JTextField(5);
-    private final JTextField stopwatchLectureField = new JTextField(5);
-    private final JButton stopwatchStartButton = new JButton("Start");
-    private final JButton stopwatchPauseResumeButton = new JButton("Pause");
-    private final JButton stopwatchStopButton = new JButton("Stop & Log");
-    private final JButton stopwatchResetButton = new JButton("Reset");
+    final JTextField stopwatchQuestionDescField = new JTextField(15);
+    final JTextField stopwatchChapterField = new JTextField(5);
+    final JTextField stopwatchLectureField = new JTextField(5);
+    private final ModernButton stopwatchStartButton = new ModernButton("Start");
+    private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause");
+    private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log");
+    private final ModernButton stopwatchResetButton = new ModernButton("Reset");
+    private final ModernButton stopwatchMiniButton = new ModernButton("Mini Mode");
 
     private boolean stopwatchRunning = false;
     private boolean stopwatchStarted = false;
@@ -81,11 +84,12 @@ public class AppFrame extends JFrame {
     private final JSpinner hoursSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 99, 1));
     private final JSpinner minutesSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 59, 1));
     private final JSpinner secondsSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 59, 1));
-    private final JComboBox<String> timerSubjectCombo = new JComboBox<>();
-    private final JButton timerStartButton = new JButton("Start");
-    private final JButton timerPauseResumeButton = new JButton("Pause");
-    private final JButton timerStopButton = new JButton("Stop");
-    private final JButton timerResetButton = new JButton("Reset");
+    final JComboBox<String> timerSubjectCombo = new JComboBox<>();
+    private final ModernButton timerStartButton = new ModernButton("Start");
+    private final ModernButton timerPauseResumeButton = new ModernButton("Pause");
+    private final ModernButton timerStopButton = new ModernButton("Stop");
+    private final ModernButton timerResetButton = new ModernButton("Reset");
+    private final ModernButton timerMiniButton = new ModernButton("Mini Mode");
 
     private boolean timerRunning = false;
     private boolean timerStarted = false;
@@ -94,8 +98,17 @@ public class AppFrame extends JFrame {
     private LocalDateTime timerSessionStart;
     private final Timer timerTick;
 
-    final JButton exportWeeklyButton = new JButton("Export Weekly XLSX");
-    final JButton exportMonthlyButton = new JButton("Export Monthly XLSX");
+    private MiniWindow miniWindow = null;
+
+    private final JComboBox<String> logsSubjectFilterCombo = new JComboBox<>();
+    private final JComboBox<String> logsModeFilterCombo = new JComboBox<>(new String[]{"All Modes", "Stopwatch", "Timer"});
+    private final JTextField logsSearchField = new JTextField(15);
+    private final List<SessionRecord> displayedSessions = new java.util.ArrayList<>();
+    private JTable logsTable;
+    private final java.util.Map<Integer, java.util.Set<String>> columnFilters = new java.util.HashMap<>();
+
+    final ModernButton exportWeeklyButton = new ModernButton("Export Weekly XLSX");
+    final ModernButton exportMonthlyButton = new ModernButton("Export Monthly XLSX");
     private final JLabel exportInfoLabel = new JLabel();
 
     final JLabel totalSessionsValueLabel = new JLabel("-");
@@ -106,7 +119,7 @@ public class AppFrame extends JFrame {
             return false;
         }
     };
-    final DefaultTableModel typeAnalysisModel = new DefaultTableModel(new Object[]{"Type", "Duration"}, 0) {
+    final DefaultTableModel dayOfWeekAnalysisModel = new DefaultTableModel(new Object[]{"Day of Week", "Duration"}, 0) {
         @Override
         public boolean isCellEditable(int row, int col) {
             return false;
@@ -125,6 +138,17 @@ public class AppFrame extends JFrame {
         }
     };
     private final PieChartPanel subjectPieChart = new PieChartPanel();
+
+    private final JComboBox<String> analysisPeriodCombo = new JComboBox<>(new String[]{
+        "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days"
+    });
+    private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
+    private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
+    private final JLabel mostActiveSubjectLabel = new JLabel("Most Active: -", SwingConstants.CENTER);
+
+    private final JLabel goalProgressLabel = new JLabel("Today: 0 / 0 min (0%)", SwingConstants.CENTER);
+    private final javax.swing.JProgressBar goalProgressBar = new javax.swing.JProgressBar(0, 100);
+    private final JLabel streakLabel = new JLabel("Streak: 0 days 🔥 (Max: 0 🏆)", SwingConstants.CENTER);
 
     public AppFrame() {
         setTitle("Time Logger");
@@ -154,10 +178,21 @@ public class AppFrame extends JFrame {
 
         refreshStopwatchSubjects();
         refreshTimerSubjects();
+        refreshLogsSubjects();
         refreshSessionsTable();
         refreshExportAvailability();
         updateStopwatchButtons();
         updateTimerButtons();
+
+        // Apply saved theme on startup
+        updateTheme(ThemeManager.loadTheme());
+
+        // Minimize memory footprint when window is iconified (minimized)
+        this.addWindowStateListener(e -> {
+            if ((e.getNewState() & JFrame.ICONIFIED) == JFrame.ICONIFIED) {
+                System.gc();
+            }
+        });
     }
 
     private JMenuBar createMenuBar() {
@@ -165,11 +200,36 @@ public class AppFrame extends JFrame {
         JMenu settingsMenu = new JMenu("Settings");
         JMenuItem subjectsMenuItem = new JMenuItem("Manage Subjects");
         subjectsMenuItem.addActionListener(e -> JOptionPane.showMessageDialog(this,
-            "Use the Settings tab to add/remove subjects.",
+            "Use the Subjects tab to add/remove subjects.",
             "Subjects",
             JOptionPane.INFORMATION_MESSAGE));
         settingsMenu.add(subjectsMenuItem);
+        
+        JMenuItem goalMenuItem = new JMenuItem("Set Daily Goal");
+        goalMenuItem.addActionListener(e -> promptSetDailyGoal());
+        settingsMenu.add(goalMenuItem);
+
         menuBar.add(settingsMenu);
+
+        JMenu themeMenu = new JMenu("Theme");
+        JMenuItem lightItem = new JMenuItem("Light Mode");
+        lightItem.addActionListener(e -> updateTheme(ThemeManager.AppTheme.LIGHT));
+        JMenuItem darkItem = new JMenuItem("Dark Mode");
+        darkItem.addActionListener(e -> updateTheme(ThemeManager.AppTheme.DARK));
+        JMenuItem hcItem = new JMenuItem("High Contrast Mode");
+        hcItem.addActionListener(e -> updateTheme(ThemeManager.AppTheme.HIGH_CONTRAST));
+        themeMenu.add(lightItem);
+        themeMenu.add(darkItem);
+        themeMenu.add(hcItem);
+        menuBar.add(themeMenu);
+
+        JMenu helpMenu = new JMenu("Help");
+        JMenuItem shortcutsMenuItem = new JMenuItem("Keyboard Shortcuts");
+        shortcutsMenuItem.setAccelerator(KeyStroke.getKeyStroke("F1"));
+        shortcutsMenuItem.addActionListener(e -> showShortcutsHelp());
+        helpMenu.add(shortcutsMenuItem);
+        menuBar.add(helpMenu);
+
         return menuBar;
     }
 
@@ -179,7 +239,7 @@ public class AppFrame extends JFrame {
         tabs.addTab("Timer", createTimerPanel());
         tabs.addTab("Logs", createLogsPanel());
         tabs.addTab("Analysis", createAnalysisPanel());
-        tabs.addTab("Settings", createSettingsPanel());
+        tabs.addTab("Subjects", createSubjectsPanel());
         return tabs;
     }
 
@@ -201,9 +261,11 @@ public class AppFrame extends JFrame {
         generalCard.add(new JLabel("Desc: "));
         generalCard.add(stopwatchActivityField);
 
-        JPanel questionsCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        JPanel questionsCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         questionsCard.add(new JLabel("Type: "));
         questionsCard.add(stopwatchQuestionTypeCombo);
+        questionsCard.add(new JLabel(" Desc: "));
+        questionsCard.add(stopwatchQuestionDescField);
 
         JPanel lectureCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         lectureCard.add(new JLabel("Ch No: "));
@@ -231,11 +293,41 @@ public class AppFrame extends JFrame {
         stopwatchPauseResumeButton.addActionListener(e -> togglePauseStopwatch());
         stopwatchStopButton.addActionListener(e -> stopAndLogStopwatch());
         stopwatchResetButton.addActionListener(e -> resetStopwatch());
+        stopwatchMiniButton.addActionListener(e -> {
+            if (subjects.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Add at least one subject in the Subjects tab first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            String selectedSubject = (String) stopwatchSubjectCombo.getSelectedItem();
+            if (selectedSubject == null || selectedSubject.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "Select a subject from the list before entering Mini Mode.",
+                    "No Subject Selected",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (!stopwatchStarted) {
+                stopwatchSubject = selectedSubject;
+                stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
+                stopwatchSessionStart = LocalDateTime.now();
+                stopwatchElapsedMillis = 0;
+                stopwatchStarted = true;
+                updateStopwatchButtons();
+            }
+            openMiniWindow(SessionRecord.SessionType.STOPWATCH);
+        });
+
+        stopwatchStartButton.setMnemonic('S');
+        stopwatchPauseResumeButton.setMnemonic('P');
+        stopwatchStopButton.setMnemonic('L');
+        stopwatchResetButton.setMnemonic('R');
+        stopwatchMiniButton.setMnemonic('M');
 
         controls.add(stopwatchStartButton);
         controls.add(stopwatchPauseResumeButton);
         controls.add(stopwatchStopButton);
         controls.add(stopwatchResetButton);
+        controls.add(stopwatchMiniButton);
 
         panel.add(config, BorderLayout.NORTH);
         panel.add(centerPanel, BorderLayout.CENTER);
@@ -264,11 +356,37 @@ public class AppFrame extends JFrame {
         timerPauseResumeButton.addActionListener(e -> togglePauseTimer());
         timerStopButton.addActionListener(e -> stopTimer());
         timerResetButton.addActionListener(e -> resetTimer());
+        timerMiniButton.addActionListener(e -> {
+            if (!timerStarted) {
+                long h = (Integer) hoursSpinner.getValue();
+                long m = (Integer) minutesSpinner.getValue();
+                long s = (Integer) secondsSpinner.getValue();
+                timerTotalSeconds = h * 3600 + m * 60 + s;
+                timerRemainingSeconds = timerTotalSeconds;
+
+                if (timerTotalSeconds <= 0) {
+                    JOptionPane.showMessageDialog(this, "Set a time greater than 00:00:00 before entering Mini Mode.", "Invalid Time", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                timerSessionStart = LocalDateTime.now();
+                timerStarted = true;
+                updateTimerButtons();
+            }
+            openMiniWindow(SessionRecord.SessionType.TIMER);
+        });
+
+        timerStartButton.setMnemonic('S');
+        timerPauseResumeButton.setMnemonic('P');
+        timerStopButton.setMnemonic('T');
+        timerResetButton.setMnemonic('R');
+        timerMiniButton.setMnemonic('M');
 
         controls.add(timerStartButton);
         controls.add(timerPauseResumeButton);
         controls.add(timerStopButton);
         controls.add(timerResetButton);
+        controls.add(timerMiniButton);
 
         panel.add(config, BorderLayout.NORTH);
         panel.add(timerTimeLabel, BorderLayout.CENTER);
@@ -280,18 +398,85 @@ public class AppFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(12, 12));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
-        JTable table = new JTable(sessionsTableModel);
-        table.setRowHeight(24);
-        panel.add(new JScrollPane(table), BorderLayout.CENTER);
+        // Filter Bar
+        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        filterBar.add(new JLabel("Subject:"));
+        filterBar.add(logsSubjectFilterCombo);
+        filterBar.add(new JLabel("Mode:"));
+        filterBar.add(logsModeFilterCombo);
+        filterBar.add(new JLabel("Search Activity:"));
+        filterBar.add(logsSearchField);
+
+        ModernButton clearFiltersBtn = new ModernButton("Clear Filters");
+        clearFiltersBtn.addActionListener(e -> {
+            logsSubjectFilterCombo.setSelectedIndex(0);
+            logsModeFilterCombo.setSelectedIndex(0);
+            logsSearchField.setText("");
+            columnFilters.clear();
+            if (logsTable.getRowSorter() != null) {
+                logsTable.getRowSorter().setSortKeys(null);
+            }
+            refreshSessionsTable();
+        });
+        filterBar.add(clearFiltersBtn);
+
+        // Add action listeners to trigger table refresh
+        logsSubjectFilterCombo.addActionListener(e -> refreshSessionsTable());
+        logsModeFilterCombo.addActionListener(e -> refreshSessionsTable());
+        
+        logsSearchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                refreshSessionsTable();
+            }
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                refreshSessionsTable();
+            }
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                refreshSessionsTable();
+            }
+        });
+
+        panel.add(filterBar, BorderLayout.NORTH);
+
+        logsTable = new JTable(sessionsTableModel);
+        logsTable.setRowHeight(24);
+
+        // TableRowSorter for Excel sorting
+        javax.swing.table.TableRowSorter<DefaultTableModel> sorter = new javax.swing.table.TableRowSorter<>(sessionsTableModel);
+        logsTable.setRowSorter(sorter);
+
+        // Custom Header Renderer
+        logsTable.getTableHeader().setDefaultRenderer(new FilterHeaderRenderer(logsTable.getTableHeader().getDefaultRenderer()));
+
+        // MouseListener on table header to trigger popup or sort
+        logsTable.getTableHeader().addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                int colIndex = logsTable.getTableHeader().columnAtPoint(e.getPoint());
+                if (colIndex == -1) return;
+
+                java.awt.Rectangle rect = logsTable.getTableHeader().getHeaderRect(colIndex);
+                // Click on the rightmost 25 pixels
+                if (e.getX() >= rect.x + rect.width - 25) {
+                    showFilterPopup(colIndex, e.getComponent(), e.getX(), e.getY());
+                    e.consume();
+                }
+            }
+        });
+
+        panel.add(new JScrollPane(logsTable), BorderLayout.CENTER);
 
         JPanel bottom = new JPanel(new BorderLayout(8, 8));
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton refreshButton = new JButton("Refresh");
+        ModernButton refreshButton = new ModernButton("Refresh");
         refreshButton.addActionListener(e -> refreshSessionsTable());
 
-        JButton deleteSelectedButton = new JButton("Delete Selected");
+        ModernButton deleteSelectedButton = new ModernButton("Delete Selected");
         deleteSelectedButton.addActionListener(e -> {
-            int selectedRow = table.getSelectedRow();
+            int selectedRow = logsTable.getSelectedRow();
             if (selectedRow == -1) {
                 JOptionPane.showMessageDialog(this,
                     "Please select a log entry to delete.",
@@ -300,20 +485,30 @@ public class AppFrame extends JFrame {
                 return;
             }
 
-            List<SessionRecord> sessions = storageService.loadSessions();
-            if (selectedRow >= 0 && selectedRow < sessions.size()) {
-                sessions.remove(selectedRow);
-                storageService.saveSessions(sessions);
-                refreshSessionsTable();
-                refreshExportAvailability();
-                JOptionPane.showMessageDialog(this,
-                    "Selected session log deleted.",
-                    "Deleted",
-                    JOptionPane.INFORMATION_MESSAGE);
+            int modelRow = logsTable.convertRowIndexToModel(selectedRow);
+            if (modelRow >= 0 && modelRow < displayedSessions.size()) {
+                SessionRecord selectedSession = displayedSessions.get(modelRow);
+                List<SessionRecord> allSessions = storageService.loadSessions();
+                
+                boolean removed = allSessions.removeIf(s -> 
+                    s.getStartTime().equals(selectedSession.getStartTime()) &&
+                    s.getSubject().equalsIgnoreCase(selectedSession.getSubject()) &&
+                    s.getType() == selectedSession.getType()
+                );
+                
+                if (removed) {
+                    storageService.saveSessions(allSessions);
+                    refreshSessionsTable();
+                    refreshExportAvailability();
+                    JOptionPane.showMessageDialog(this,
+                        "Selected session log deleted.",
+                        "Deleted",
+                        JOptionPane.INFORMATION_MESSAGE);
+                }
             }
         });
 
-        JButton clearAllButton = new JButton("Clear All Logs");
+        ModernButton clearAllButton = new ModernButton("Clear All Logs");
         clearAllButton.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(this,
                 "Are you sure you want to clear all tracking history?\nThis action cannot be undone.",
@@ -350,7 +545,7 @@ public class AppFrame extends JFrame {
         return panel;
     }
 
-    private JPanel createSettingsPanel() {
+    private JPanel createSubjectsPanel() {
         JPanel panel = new JPanel(new BorderLayout(12, 12));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
@@ -366,8 +561,8 @@ public class AppFrame extends JFrame {
         gbc.anchor = GridBagConstraints.WEST;
 
         JTextField subjectField = new JTextField(20);
-        JButton addButton = new JButton("Add");
-        JButton removeButton = new JButton("Remove Selected");
+        ModernButton addButton = new ModernButton("Add");
+        ModernButton removeButton = new ModernButton("Remove Selected");
 
         formPanel.add(new JLabel("Subject"), gbc);
         gbc.gridx = 1;
@@ -421,25 +616,61 @@ public class AppFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(16, 16));
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // Top Summary Panel
-        JPanel summaryPanel = new JPanel(new java.awt.GridLayout(1, 3, 20, 20));
+        // Top Filter Bar
+        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        JLabel filterLabel = new JLabel("Time Period:");
+        filterLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        filterBar.add(filterLabel);
+        filterBar.add(analysisPeriodCombo);
         
-        JPanel sessionsCard = new JPanel(new BorderLayout(8, 8));
+        analysisPeriodCombo.addActionListener(e -> refreshAnalysis());
+
+        // Top Summary Panel
+        JPanel summaryPanel = new JPanel(new java.awt.GridLayout(1, 4, 20, 20));
+        summaryPanel.setName("summaryPanel");
+        
+        JPanel goalCard = new JPanel(new java.awt.GridLayout(3, 1, 4, 4));
+        goalCard.setBorder(BorderFactory.createTitledBorder("Daily Goal & Streaks"));
+
+        goalProgressLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        streakLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        goalProgressBar.setStringPainted(true);
+
+        JPanel progressPanel = new JPanel(new BorderLayout());
+        progressPanel.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
+        progressPanel.add(goalProgressBar, BorderLayout.CENTER);
+
+        goalCard.add(goalProgressLabel);
+        goalCard.add(progressPanel);
+        goalCard.add(streakLabel);
+        
+        JPanel sessionsCard = new JPanel(new java.awt.GridLayout(2, 1, 4, 4));
         sessionsCard.setBorder(BorderFactory.createTitledBorder("Total Sessions"));
         totalSessionsValueLabel.setFont(new Font("SansSerif", Font.BOLD, 36));
         totalSessionsValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        sessionsCard.add(totalSessionsValueLabel, BorderLayout.CENTER);
+        sessionsCard.add(totalSessionsValueLabel);
+        avgSessionLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        avgSessionLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        sessionsCard.add(avgSessionLabel);
         
-        JPanel durationCard = new JPanel(new BorderLayout(8, 8));
+        JPanel durationCard = new JPanel(new java.awt.GridLayout(3, 1, 2, 2));
         durationCard.setBorder(BorderFactory.createTitledBorder("Total Duration"));
-        totalDurationValueLabel.setFont(new Font("Monospaced", Font.BOLD, 36));
+        totalDurationValueLabel.setFont(new Font("Monospaced", Font.BOLD, 28));
         totalDurationValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        durationCard.add(totalDurationValueLabel, BorderLayout.CENTER);
+        durationCard.add(totalDurationValueLabel);
+        activeDayAvgLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        activeDayAvgLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        durationCard.add(activeDayAvgLabel);
+        mostActiveSubjectLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        mostActiveSubjectLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        durationCard.add(mostActiveSubjectLabel);
 
         JPanel chartCard = new JPanel(new BorderLayout(8, 8));
         chartCard.setBorder(BorderFactory.createTitledBorder("Subject Distribution"));
         chartCard.add(subjectPieChart, BorderLayout.CENTER);
 
+        summaryPanel.add(goalCard);
         summaryPanel.add(sessionsCard);
         summaryPanel.add(durationCard);
         summaryPanel.add(chartCard);
@@ -465,15 +696,15 @@ public class AppFrame extends JFrame {
         activityCard.setBorder(BorderFactory.createTitledBorder("By Activity"));
         activityCard.add(new JScrollPane(activityTable), BorderLayout.CENTER);
 
-        JTable typeTable = new JTable(typeAnalysisModel);
-        typeTable.setRowHeight(24);
-        JPanel typeCard = new JPanel(new BorderLayout(8, 8));
-        typeCard.setBorder(BorderFactory.createTitledBorder("By Tracking Type"));
-        typeCard.add(new JScrollPane(typeTable), BorderLayout.CENTER);
+        JTable dayOfWeekTable = new JTable(dayOfWeekAnalysisModel);
+        dayOfWeekTable.setRowHeight(24);
+        JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
+        dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week"));
+        dayOfWeekCard.add(new JScrollPane(dayOfWeekTable), BorderLayout.CENTER);
 
         JPanel rightColPanel = new JPanel(new java.awt.GridLayout(2, 1, 0, 20));
         rightColPanel.add(activityCard);
-        rightColPanel.add(typeCard);
+        rightColPanel.add(dayOfWeekCard);
 
         breakdownPanel.add(subjectCard);
         breakdownPanel.add(chapterCard);
@@ -481,25 +712,94 @@ public class AppFrame extends JFrame {
 
         // Bottom Controls
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton refreshBtn = new JButton("Refresh Analysis");
+        ModernButton refreshBtn = new ModernButton("Refresh Analysis");
         refreshBtn.addActionListener(e -> refreshAnalysis());
         bottomPanel.add(refreshBtn);
 
-        panel.add(summaryPanel, BorderLayout.NORTH);
-        panel.add(breakdownPanel, BorderLayout.CENTER);
+        JPanel mainContent = new JPanel(new BorderLayout(16, 16));
+        mainContent.setOpaque(false);
+        mainContent.add(summaryPanel, BorderLayout.NORTH);
+        mainContent.add(breakdownPanel, BorderLayout.CENTER);
+
+        panel.add(filterBar, BorderLayout.NORTH);
+        panel.add(mainContent, BorderLayout.CENTER);
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
         return panel;
     }
 
     private void refreshAnalysis() {
-        List<SessionRecord> sessions = storageService.loadSessions();
+        List<SessionRecord> rawSessions = storageService.loadSessions();
+        
+        // Filter based on selected time period
+        String period = (String) analysisPeriodCombo.getSelectedItem();
+        if (period == null) period = "All Time";
+        
+        final String finalPeriod = period;
+        LocalDate today = LocalDate.now();
+        List<SessionRecord> sessions = rawSessions.stream()
+            .filter(s -> {
+                LocalDate sDate = s.getStartTime().toLocalDate();
+                switch (finalPeriod) {
+                    case "Today":
+                        return sDate.equals(today);
+                    case "Yesterday":
+                        return sDate.equals(today.minusDays(1));
+                    case "This Week":
+                        LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                        return !sDate.isBefore(startOfWeek) && !sDate.isAfter(today);
+                    case "Last 7 Days":
+                        return !sDate.isBefore(today.minusDays(6)) && !sDate.isAfter(today);
+                    case "This Month":
+                        return sDate.getYear() == today.getYear() && sDate.getMonth() == today.getMonth();
+                    case "Last 30 Days":
+                        return !sDate.isBefore(today.minusDays(29)) && !sDate.isAfter(today);
+                    default:
+                        return true; // All Time
+                }
+            })
+            .collect(Collectors.toList());
         
         int totalSessions = sessions.size();
         long totalSeconds = sessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
         
         totalSessionsValueLabel.setText(String.valueOf(totalSessions));
         totalDurationValueLabel.setText(formatDuration(totalSeconds));
+
+        // Average session duration
+        if (totalSessions > 0) {
+            avgSessionLabel.setText("Avg Duration: " + formatDuration(totalSeconds / totalSessions));
+        } else {
+            avgSessionLabel.setText("Avg Duration: 00:00:00");
+        }
+
+        // Active day average
+        long uniqueDays = sessions.stream()
+            .map(s -> s.getStartTime().toLocalDate())
+            .distinct()
+            .count();
+        if (uniqueDays > 0) {
+            activeDayAvgLabel.setText("Active Day Avg: " + formatDuration(totalSeconds / uniqueDays));
+        } else {
+            activeDayAvgLabel.setText("Active Day Avg: 00:00:00");
+        }
+
+        // Goal & Streak update
+        GoalStreakStats stats = calculateGoalStreakStats();
+        goalProgressLabel.setText(String.format("Today: %d / %d mins (%d%%)", 
+            stats.todayMinutes, stats.dailyGoalMinutes, 
+            stats.dailyGoalMinutes > 0 ? (stats.todayMinutes * 100 / stats.dailyGoalMinutes) : 0));
+        
+        int percent = stats.dailyGoalMinutes > 0 ? Math.min(100, stats.todayMinutes * 100 / stats.dailyGoalMinutes) : 0;
+        goalProgressBar.setValue(percent);
+        if (stats.todayGoalMet) {
+            goalProgressBar.setForeground(new java.awt.Color(46, 139, 87));
+        } else {
+            goalProgressBar.setForeground(new java.awt.Color(70, 130, 180));
+        }
+        
+        streakLabel.setText(String.format("Streak: %d days %s (Max: %d 🏆)", 
+            stats.currentStreak, stats.currentStreak > 0 ? "🔥" : "💤", stats.maxStreak));
         
         // Subject breakdown
         subjectAnalysisModel.setRowCount(0);
@@ -515,6 +815,16 @@ public class AppFrame extends JFrame {
                 });
             });
         subjectPieChart.setData(bySubject);
+
+        String mostActive = bySubject.entrySet().stream()
+            .max(java.util.Map.Entry.comparingByValue())
+            .map(entry -> entry.getKey() + " (" + formatDuration(entry.getValue()) + ")")
+            .orElse("None");
+        
+        if (mostActive.length() > 25) {
+            mostActive = mostActive.substring(0, 22) + "...";
+        }
+        mostActiveSubjectLabel.setText("Most Active: " + mostActive);
 
         // Chapter breakdown
         chapterAnalysisModel.setRowCount(0);
@@ -554,11 +864,11 @@ public class AppFrame extends JFrame {
             long sec = session.getDurationSeconds();
             if (desc.startsWith("Questions: ")) {
                 String qType = desc.substring("Questions: ".length());
-                if (qType.equals("DPP Questions")) {
+                if (qType.startsWith("DPP Questions")) {
                     dppSec += sec;
-                } else if (qType.equals("Practice Book Questions")) {
+                } else if (qType.startsWith("Practice Book Questions")) {
                     practiceSec += sec;
-                } else if (qType.equals("Previous Year Questions")) {
+                } else if (qType.startsWith("Previous Year Questions")) {
                     pyqSec += sec;
                 } else {
                     generalSec += sec;
@@ -574,22 +884,27 @@ public class AppFrame extends JFrame {
         activityAnalysisModel.addRow(new Object[]{"Previous Year Questions", formatDuration(pyqSec)});
         activityAnalysisModel.addRow(new Object[]{"General / Other", formatDuration(generalSec)});
 
-        // Type breakdown
-        typeAnalysisModel.setRowCount(0);
-        java.util.Map<SessionRecord.SessionType, Long> byType = sessions.stream()
-            .collect(Collectors.groupingBy(SessionRecord::getType, Collectors.summingLong(SessionRecord::getDurationSeconds)));
+        // Day of Week breakdown
+        dayOfWeekAnalysisModel.setRowCount(0);
+        java.util.Map<java.time.DayOfWeek, Long> byDay = sessions.stream()
+            .collect(Collectors.groupingBy(
+                s -> s.getStartTime().getDayOfWeek(),
+                Collectors.summingLong(SessionRecord::getDurationSeconds)
+            ));
         
-        for (java.util.Map.Entry<SessionRecord.SessionType, Long> entry : byType.entrySet()) {
-            typeAnalysisModel.addRow(new Object[]{
-                entry.getKey().name(),
-                formatDuration(entry.getValue())
+        for (java.time.DayOfWeek day : java.time.DayOfWeek.values()) {
+            long sec = byDay.getOrDefault(day, 0L);
+            String dayName = day.name().charAt(0) + day.name().substring(1).toLowerCase();
+            dayOfWeekAnalysisModel.addRow(new Object[]{
+                dayName,
+                formatDuration(sec)
             });
         }
     }
 
-    private void startStopwatch() {
+    public void startStopwatch() {
         if (subjects.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Add at least one subject in Settings first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Add at least one subject in the Subjects tab first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -597,7 +912,7 @@ public class AppFrame extends JFrame {
             String selectedSubject = (String) stopwatchSubjectCombo.getSelectedItem();
 
             if (selectedSubject == null || selectedSubject.trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this,
+                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
                     "Select a subject from the list before starting stopwatch.",
                     "No Subject Selected",
                     JOptionPane.WARNING_MESSAGE);
@@ -619,7 +934,7 @@ public class AppFrame extends JFrame {
         }
     }
 
-    private void togglePauseStopwatch() {
+    public void togglePauseStopwatch() {
         if (!stopwatchStarted) {
             return;
         }
@@ -646,7 +961,7 @@ public class AppFrame extends JFrame {
         updateStopwatchButtons();
     }
 
-    private void stopAndLogStopwatch() {
+    public void stopAndLogStopwatch() {
         if (!stopwatchStarted) {
             return;
         }
@@ -663,7 +978,9 @@ public class AppFrame extends JFrame {
         if ("General".equals(activityType)) {
             activityDetail = stopwatchActivityField.getText().trim();
         } else if ("Questions".equals(activityType)) {
-            activityDetail = "Questions: " + stopwatchQuestionTypeCombo.getSelectedItem();
+            String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+            String qDesc = stopwatchQuestionDescField.getText().trim();
+            activityDetail = "Questions: " + qType + (qDesc.isEmpty() ? "" : ", " + qDesc);
         } else if ("Lecture".equals(activityType)) {
             String ch = stopwatchChapterField.getText().trim();
             String lec = stopwatchLectureField.getText().trim();
@@ -682,10 +999,13 @@ public class AppFrame extends JFrame {
         refreshSessionsTable();
         refreshExportAvailability();
         resetStopwatch();
-        JOptionPane.showMessageDialog(this, "Stopwatch session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Stopwatch session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
+        if (miniWindow != null) {
+            closeMiniWindow();
+        }
     }
 
-    private void resetStopwatch() {
+    public void resetStopwatch() {
         stopwatchRunning = false;
         stopwatchStarted = false;
         stopwatchElapsedMillis = 0;
@@ -698,6 +1018,7 @@ public class AppFrame extends JFrame {
         stopwatchActivityField.setText("");
         stopwatchChapterField.setText("");
         stopwatchLectureField.setText("");
+        stopwatchQuestionDescField.setText("");
         stopwatchActivityTypeCombo.setSelectedIndex(0);
         stopwatchQuestionTypeCombo.setSelectedIndex(0);
         updateStopwatchButtons();
@@ -710,7 +1031,11 @@ public class AppFrame extends JFrame {
         }
 
         long totalSeconds = elapsed / 1000;
-        stopwatchTimeLabel.setText(formatDuration(totalSeconds));
+        String formatted = formatDuration(totalSeconds);
+        stopwatchTimeLabel.setText(formatted);
+        if (miniWindow != null) {
+            miniWindow.updateTime(formatted);
+        }
     }
 
     private void updateStopwatchButtons() {
@@ -723,11 +1048,15 @@ public class AppFrame extends JFrame {
         stopwatchActivityTypeCombo.setEnabled(!stopwatchStarted);
         stopwatchActivityField.setEnabled(!stopwatchStarted);
         stopwatchQuestionTypeCombo.setEnabled(!stopwatchStarted);
+        stopwatchQuestionDescField.setEnabled(!stopwatchStarted);
         stopwatchChapterField.setEnabled(!stopwatchStarted);
         stopwatchLectureField.setEnabled(!stopwatchStarted);
+        if (miniWindow != null) {
+            miniWindow.updateState();
+        }
     }
 
-    private void startTimer() {
+    public void startTimer() {
         if (!timerStarted) {
             long h = (Integer) hoursSpinner.getValue();
             long m = (Integer) minutesSpinner.getValue();
@@ -736,7 +1065,7 @@ public class AppFrame extends JFrame {
             timerRemainingSeconds = timerTotalSeconds;
 
             if (timerTotalSeconds <= 0) {
-                JOptionPane.showMessageDialog(this, "Set a time greater than 00:00:00.", "Invalid Time", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Set a time greater than 00:00:00.", "Invalid Time", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
@@ -751,7 +1080,7 @@ public class AppFrame extends JFrame {
         }
     }
 
-    private void togglePauseTimer() {
+    public void togglePauseTimer() {
         if (!timerStarted) {
             return;
         }
@@ -765,7 +1094,7 @@ public class AppFrame extends JFrame {
         updateTimerButtons();
     }
 
-    private void stopTimer() {
+    public void stopTimer() {
         if (!timerStarted) {
             return;
         }
@@ -778,13 +1107,16 @@ public class AppFrame extends JFrame {
         long elapsed = timerTotalSeconds - timerRemainingSeconds;
         if (elapsed > 0) {
             logTimerSession(elapsed);
-            JOptionPane.showMessageDialog(this, "Timer session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Timer session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
         }
 
         resetTimer();
+        if (miniWindow != null) {
+            closeMiniWindow();
+        }
     }
 
-    private void resetTimer() {
+    public void resetTimer() {
         timerTick.stop();
         timerRunning = false;
         timerStarted = false;
@@ -801,15 +1133,22 @@ public class AppFrame extends JFrame {
         }
 
         timerRemainingSeconds--;
-        timerTimeLabel.setText(formatDuration(Math.max(0, timerRemainingSeconds)));
+        String formatted = formatDuration(Math.max(0, timerRemainingSeconds));
+        timerTimeLabel.setText(formatted);
+        if (miniWindow != null) {
+            miniWindow.updateTime(formatted);
+        }
 
         if (timerRemainingSeconds <= 0) {
             timerTick.stop();
             timerRunning = false;
             long elapsed = timerTotalSeconds;
             logTimerSession(elapsed);
-            JOptionPane.showMessageDialog(this, "Timer finished and session logged.", "Completed", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Timer finished and session logged.", "Completed", JOptionPane.INFORMATION_MESSAGE);
             resetTimer();
+            if (miniWindow != null) {
+                closeMiniWindow();
+            }
         }
     }
 
@@ -834,19 +1173,75 @@ public class AppFrame extends JFrame {
     private void refreshSessionsTable() {
         sessionsTableModel.setRowCount(0);
 
-        List<SessionRecord> sessions = storageService.loadSessions();
+        List<SessionRecord> rawSessions = storageService.loadSessions();
+        
+        String selectedSubject = logsSubjectFilterCombo != null ? (String) logsSubjectFilterCombo.getSelectedItem() : "All Subjects";
+        String selectedMode = logsModeFilterCombo != null ? (String) logsModeFilterCombo.getSelectedItem() : "All Modes";
+        String searchKeyword = logsSearchField != null ? logsSearchField.getText().trim().toLowerCase() : "";
+
+        java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+        java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.MEDIUM);
+
+        List<SessionRecord> sessions = rawSessions.stream()
+            .filter(session -> {
+                // Filter by Subject
+                if (selectedSubject != null && !selectedSubject.equals("All Subjects")) {
+                    if (!session.getSubject().equalsIgnoreCase(selectedSubject)) {
+                        return false;
+                    }
+                }
+                // Filter by Mode
+                if (selectedMode != null && !selectedMode.equals("All Modes")) {
+                    if (selectedMode.equalsIgnoreCase("Stopwatch") && session.getType() != SessionRecord.SessionType.STOPWATCH) {
+                        return false;
+                    }
+                    if (selectedMode.equalsIgnoreCase("Timer") && session.getType() != SessionRecord.SessionType.TIMER) {
+                        return false;
+                    }
+                }
+                // Filter by search query on description
+                if (!searchKeyword.isEmpty()) {
+                    String desc = session.getDescription().toLowerCase();
+                    if (!desc.contains(searchKeyword)) {
+                        return false;
+                    }
+                }
+                // Filter by column checklists
+                for (java.util.Map.Entry<Integer, java.util.Set<String>> entry : columnFilters.entrySet()) {
+                    int col = entry.getKey();
+                    java.util.Set<String> allowedValues = entry.getValue();
+                    if (allowedValues != null) {
+                        String value = getSessionValueForColumn(session, col, dateFormatter, timeFormatter);
+                        if (!allowedValues.contains(value)) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            })
+            .collect(Collectors.toList());
+
+        // Update the displayed sessions reference
+        displayedSessions.clear();
+        displayedSessions.addAll(sessions);
+
         for (SessionRecord session : sessions) {
+            String dateStr = session.getStartTime().toLocalDate().format(dateFormatter);
+            String startTimeStr = session.getStartTime().toLocalTime().format(timeFormatter);
+            String endTimeStr = session.getEndTime().toLocalTime().format(timeFormatter);
             sessionsTableModel.addRow(new Object[]{
+                dateStr,
                 session.getType().name(),
                 session.getSubject(),
                 session.getDescription(),
-                session.getStartTime().toString().replace('T', ' '),
-                session.getEndTime().toString().replace('T', ' '),
-                session.getDurationSeconds(),
+                startTimeStr,
+                endTimeStr,
                 formatDuration(session.getDurationSeconds())
             });
         }
         refreshAnalysis();
+        refreshStopwatchSubjects();
+        refreshTimerSubjects();
     }
 
     private void persistSubjects() {
@@ -855,12 +1250,34 @@ public class AppFrame extends JFrame {
         subjects.stream().sorted(String::compareToIgnoreCase).forEach(subjectsListModel::addElement);
         refreshStopwatchSubjects();
         refreshTimerSubjects();
+        refreshLogsSubjects();
+    }
+
+    public List<String> getSubjectsSortedByUsage() {
+        List<SessionRecord> sessions = storageService.loadSessions();
+        java.util.Map<String, Long> subjectUsage = new java.util.HashMap<>();
+        for (SessionRecord session : sessions) {
+            String sub = session.getSubject();
+            subjectUsage.put(sub, subjectUsage.getOrDefault(sub, 0L) + session.getDurationSeconds());
+        }
+
+        List<String> sortedSubjects = new ArrayList<>(subjects);
+        sortedSubjects.sort((a, b) -> {
+            long usageA = subjectUsage.getOrDefault(a, 0L);
+            long usageB = subjectUsage.getOrDefault(b, 0L);
+            if (usageA != usageB) {
+                return Long.compare(usageB, usageA); // Descending
+            }
+            return a.compareToIgnoreCase(b); // Alphabetical fallback
+        });
+        return sortedSubjects;
     }
 
     private void refreshStopwatchSubjects() {
         String previous = (String) stopwatchSubjectCombo.getSelectedItem();
         DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-        for (String subject : subjects) {
+        List<String> sorted = getSubjectsSortedByUsage();
+        for (String subject : sorted) {
             model.addElement(subject);
         }
         stopwatchSubjectCombo.setModel(model);
@@ -875,7 +1292,8 @@ public class AppFrame extends JFrame {
     private void refreshTimerSubjects() {
         String previous = (String) timerSubjectCombo.getSelectedItem();
         DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-        for (String subject : subjects) {
+        List<String> sorted = getSubjectsSortedByUsage();
+        for (String subject : sorted) {
             model.addElement(subject);
         }
         timerSubjectCombo.setModel(model);
@@ -884,6 +1302,23 @@ public class AppFrame extends JFrame {
             timerSubjectCombo.setSelectedItem(previous);
         } else if (!subjects.isEmpty()) {
             timerSubjectCombo.setSelectedIndex(0);
+        }
+    }
+
+    private void refreshLogsSubjects() {
+        String previous = (String) logsSubjectFilterCombo.getSelectedItem();
+        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        model.addElement("All Subjects");
+        List<String> sorted = getSubjectsSortedByUsage();
+        for (String subject : sorted) {
+            model.addElement(subject);
+        }
+        logsSubjectFilterCombo.setModel(model);
+
+        if (previous != null) {
+            logsSubjectFilterCombo.setSelectedItem(previous);
+        } else {
+            logsSubjectFilterCombo.setSelectedIndex(0);
         }
     }
 
@@ -962,6 +1397,9 @@ public class AppFrame extends JFrame {
         timerPauseResumeButton.setText(timerRunning ? "Pause" : "Resume");
         timerStopButton.setEnabled(timerStarted);
         timerResetButton.setEnabled(timerStarted);
+        if (miniWindow != null) {
+            miniWindow.updateState();
+        }
     }
 
     private String formatDuration(long totalSeconds) {
@@ -969,5 +1407,416 @@ public class AppFrame extends JFrame {
         long minutes = (totalSeconds % 3600) / 60;
         long seconds = totalSeconds % 60;
         return String.format("%02d:%02d:%02d", hours, minutes, seconds);
+    }
+
+    public void openMiniWindow(SessionRecord.SessionType mode) {
+        if (miniWindow != null) {
+            miniWindow.dispose();
+        }
+        miniWindow = new MiniWindow(this, mode);
+        miniWindow.setVisible(true);
+        this.setVisible(false);
+        System.gc();
+    }
+
+    public void closeMiniWindow() {
+        if (miniWindow != null) {
+            miniWindow.dispose();
+            miniWindow = null;
+        }
+        this.setVisible(true);
+        refreshSessionsTable();
+        System.gc();
+    }
+
+    public String getStopwatchSubject() {
+        return stopwatchSubject != null ? stopwatchSubject : (String) stopwatchSubjectCombo.getSelectedItem();
+    }
+
+    public boolean isStopwatchStarted() {
+        return stopwatchStarted;
+    }
+
+    public boolean isStopwatchRunning() {
+        return stopwatchRunning;
+    }
+
+    public String getTimerSubject() {
+        String subject = (String) timerSubjectCombo.getSelectedItem();
+        return (subject != null && !subject.isBlank()) ? subject : "General";
+    }
+
+    public boolean isTimerStarted() {
+        return timerStarted;
+    }
+
+    public boolean isTimerRunning() {
+        return timerRunning;
+    }
+
+    public void showShortcutsHelp() {
+        String msg = "Time Logger Keyboard Shortcuts\n\n" +
+            "=== Main Window Shortcuts (Alt + Key) ===\n" +
+            "Stopwatch:\n" +
+            "  Alt + S : Start Stopwatch\n" +
+            "  Alt + P : Pause / Resume Stopwatch\n" +
+            "  Alt + L : Stop & Log Stopwatch Session\n" +
+            "  Alt + R : Reset Stopwatch\n" +
+            "  Alt + M : Enter Mini Mode\n\n" +
+            "Timer:\n" +
+            "  Alt + S : Start Timer\n" +
+            "  Alt + P : Pause / Resume Timer\n" +
+            "  Alt + T : Stop Timer\n" +
+            "  Alt + R : Reset Timer\n" +
+            "  Alt + M : Enter Mini Mode\n\n" +
+            "=== Mini Mode Window Shortcuts ===\n" +
+            "  Space   : Start / Pause / Resume\n" +
+            "  Enter   : Stop & Log (Stopwatch) or Stop (Timer)\n" +
+            "  Escape  : Maximize (Restore Full Mode)\n" +
+            "  Alt + S : Start\n" +
+            "  Alt + P : Pause / Resume\n" +
+            "  Alt + L / Alt + T : Stop / Log\n" +
+            "  Alt + R : Reset\n" +
+            "  Alt + M : Maximize";
+        
+        JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+            msg,
+            "Keyboard Shortcuts Help",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public static class GoalStreakStats {
+        public int todayMinutes;
+        public int dailyGoalMinutes;
+        public int currentStreak;
+        public int maxStreak;
+        public boolean todayGoalMet;
+    }
+
+    public GoalStreakStats calculateGoalStreakStats() {
+        GoalStreakStats stats = new GoalStreakStats();
+        stats.dailyGoalMinutes = storageService.loadDailyGoalMinutes();
+        
+        List<SessionRecord> sessions = storageService.loadSessions();
+        LocalDate today = LocalDate.now();
+        
+        // Group seconds by date
+        java.util.Map<LocalDate, Long> secondsPerDay = new java.util.HashMap<>();
+        for (SessionRecord session : sessions) {
+            LocalDate date = session.getStartTime().toLocalDate();
+            long sec = session.getDurationSeconds();
+            secondsPerDay.put(date, secondsPerDay.getOrDefault(date, 0L) + sec);
+        }
+        
+        stats.todayMinutes = (int) (secondsPerDay.getOrDefault(today, 0L) / 60);
+        stats.todayGoalMet = stats.todayMinutes >= stats.dailyGoalMinutes;
+        
+        // Helper to check if goal was met on a date
+        java.util.function.Predicate<LocalDate> metGoal = date -> {
+            long sec = secondsPerDay.getOrDefault(date, 0L);
+            return (sec / 60) >= stats.dailyGoalMinutes;
+        };
+        
+        // 1. Calculate Current Streak
+        int currentStreak = 0;
+        if (metGoal.test(today)) {
+            LocalDate d = today;
+            while (metGoal.test(d)) {
+                currentStreak++;
+                d = d.minusDays(1);
+            }
+        } else if (metGoal.test(today.minusDays(1))) {
+            LocalDate d = today.minusDays(1);
+            while (metGoal.test(d)) {
+                currentStreak++;
+                d = d.minusDays(1);
+            }
+        }
+        stats.currentStreak = currentStreak;
+        
+        // 2. Calculate Max Streak
+        if (sessions.isEmpty()) {
+            stats.maxStreak = 0;
+            return stats;
+        }
+        
+        LocalDate earliest = sessions.stream()
+            .map(s -> s.getStartTime().toLocalDate())
+            .min(LocalDate::compareTo)
+            .orElse(today);
+            
+        int maxStreak = 0;
+        int running = 0;
+        LocalDate d = earliest;
+        while (!d.isAfter(today)) {
+            if (metGoal.test(d)) {
+                running++;
+                maxStreak = Math.max(maxStreak, running);
+            } else {
+                running = 0;
+            }
+            d = d.plusDays(1);
+        }
+        stats.maxStreak = maxStreak;
+        
+        return stats;
+    }
+
+    private void promptSetDailyGoal() {
+        int currentGoal = storageService.loadDailyGoalMinutes();
+        int currentHours = currentGoal / 60;
+        int currentMins = currentGoal % 60;
+        
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 6));
+        JSpinner hrSpinner = new JSpinner(new SpinnerNumberModel(currentHours, 0, 24, 1));
+        JSpinner minSpinner = new JSpinner(new SpinnerNumberModel(currentMins, 0, 59, 1));
+        
+        panel.add(new JLabel("Hours:"));
+        panel.add(hrSpinner);
+        panel.add(new JLabel("Minutes:"));
+        panel.add(minSpinner);
+        
+        int result = JOptionPane.showConfirmDialog(miniWindow != null ? miniWindow : this,
+            panel,
+            "Set Daily Goal",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+            
+        if (result == JOptionPane.OK_OPTION) {
+            int hrs = (Integer) hrSpinner.getValue();
+            int mins = (Integer) minSpinner.getValue();
+            int totalMins = hrs * 60 + mins;
+            if (totalMins <= 0) {
+                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+                    "Goal must be greater than 0 minutes.",
+                    "Invalid Goal",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            storageService.saveDailyGoalMinutes(totalMins);
+            refreshAnalysis();
+            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+                "Daily goal saved successfully!",
+                "Goal Saved",
+                JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    public void updateTheme(ThemeManager.AppTheme theme) {
+        ThemeManager.saveTheme(theme);
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(theme);
+        ThemeManager.applyTheme(this, colors);
+        if (miniWindow != null) {
+            ThemeManager.applyTheme(miniWindow, colors);
+        }
+        this.repaint();
+    }
+
+    // --- Excel-like Filtering and Sorting helpers ---
+
+    private String getSessionValueForColumn(SessionRecord session, int col, java.time.format.DateTimeFormatter dateFormatter, java.time.format.DateTimeFormatter timeFormatter) {
+        switch (col) {
+            case 0: return session.getStartTime().toLocalDate().format(dateFormatter);
+            case 1: return session.getType().name();
+            case 2: return session.getSubject();
+            case 3: return session.getDescription();
+            case 4: return session.getStartTime().toLocalTime().format(timeFormatter);
+            case 5: return session.getEndTime().toLocalTime().format(timeFormatter);
+            case 6: return formatDuration(session.getDurationSeconds());
+            default: return "";
+        }
+    }
+
+    private java.util.List<String> getUniqueValuesForColumn(int colIndex) {
+        java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+        java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.MEDIUM);
+        
+        List<SessionRecord> rawSessions = storageService.loadSessions();
+        return rawSessions.stream()
+            .map(s -> getSessionValueForColumn(s, colIndex, dateFormatter, timeFormatter))
+            .distinct()
+            .sorted(String::compareToIgnoreCase)
+            .collect(Collectors.toList());
+    }
+
+    private void sortTableColumn(int colIndex, boolean ascending) {
+        javax.swing.table.TableRowSorter<?> sorter = (javax.swing.table.TableRowSorter<?>) logsTable.getRowSorter();
+        if (sorter != null) {
+            java.util.List<javax.swing.RowSorter.SortKey> sortKeys = new java.util.ArrayList<>();
+            sortKeys.add(new javax.swing.RowSorter.SortKey(colIndex, ascending ? javax.swing.SortOrder.ASCENDING : javax.swing.SortOrder.DESCENDING));
+            sorter.setSortKeys(sortKeys);
+            sorter.sort();
+        }
+    }
+
+    private void showFilterPopup(int colIndex, java.awt.Component invoker, int x, int y) {
+        ColumnFilterPopup popup = new ColumnFilterPopup(colIndex);
+        popup.show(invoker, x, y);
+    }
+
+    private class FilterHeaderRenderer implements javax.swing.table.TableCellRenderer {
+        private final javax.swing.table.TableCellRenderer defaultRenderer;
+
+        public FilterHeaderRenderer(javax.swing.table.TableCellRenderer defaultRenderer) {
+            this.defaultRenderer = defaultRenderer;
+        }
+
+        @Override
+        public java.awt.Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            java.awt.Component c = defaultRenderer.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            if (c instanceof JLabel) {
+                JLabel label = (JLabel) c;
+                boolean hasActiveFilter = columnFilters.containsKey(column);
+                String text = value.toString();
+                if (hasActiveFilter) {
+                    label.setText(text + " ⛛");
+                } else {
+                    label.setText(text + " ▾");
+                }
+            }
+            return c;
+        }
+    }
+
+    private class ColumnFilterPopup extends javax.swing.JPopupMenu {
+        private final int colIndex;
+        private final JTextField searchField = new JTextField(12);
+        private final JPanel listPanel = new JPanel();
+        private final JScrollPane scrollPane = new JScrollPane(listPanel);
+        private final javax.swing.JCheckBox selectAllBox = new javax.swing.JCheckBox("(Select All)", true);
+        private final java.util.List<javax.swing.JCheckBox> valueBoxes = new java.util.ArrayList<>();
+        private final java.util.List<String> uniqueValues;
+        
+        public ColumnFilterPopup(int colIndex) {
+            this.colIndex = colIndex;
+            this.uniqueValues = getUniqueValuesForColumn(colIndex);
+            
+            setLayout(new BorderLayout(8, 8));
+            setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            
+            // Sort options
+            JPanel sortPanel = new JPanel(new java.awt.GridLayout(2, 1, 2, 2));
+            sortPanel.setOpaque(false);
+            
+            JMenuItem sortAsc = new JMenuItem("Sort Ascending (A to Z)");
+            sortAsc.addActionListener(e -> {
+                sortTableColumn(colIndex, true);
+                ColumnFilterPopup.this.setVisible(false);
+            });
+            JMenuItem sortDesc = new JMenuItem("Sort Descending (Z to A)");
+            sortDesc.addActionListener(e -> {
+                sortTableColumn(colIndex, false);
+                ColumnFilterPopup.this.setVisible(false);
+            });
+            sortPanel.add(sortAsc);
+            sortPanel.add(sortDesc);
+            add(sortPanel, BorderLayout.NORTH);
+            
+            // Search and list container
+            JPanel centerPanel = new JPanel(new BorderLayout(4, 4));
+            centerPanel.setOpaque(false);
+            
+            JPanel searchPane = new JPanel(new BorderLayout(4, 4));
+            searchPane.setOpaque(false);
+            searchPane.add(new JLabel("Search:"), BorderLayout.WEST);
+            searchPane.add(searchField, BorderLayout.CENTER);
+            centerPanel.add(searchPane, BorderLayout.NORTH);
+            
+            // Scrollable list
+            listPanel.setLayout(new javax.swing.BoxLayout(listPanel, javax.swing.BoxLayout.Y_AXIS));
+            listPanel.setOpaque(false);
+            
+            // Populate valueBoxes
+            java.util.Set<String> activeFilter = columnFilters.get(colIndex);
+            
+            selectAllBox.setOpaque(false);
+            selectAllBox.addActionListener(e -> {
+                boolean sel = selectAllBox.isSelected();
+                for (javax.swing.JCheckBox cb : valueBoxes) {
+                    if (cb.isVisible()) {
+                        cb.setSelected(sel);
+                    }
+                }
+            });
+            listPanel.add(selectAllBox);
+            
+            for (String val : uniqueValues) {
+                boolean isChecked = (activeFilter == null || activeFilter.contains(val));
+                javax.swing.JCheckBox cb = new javax.swing.JCheckBox(val.isEmpty() ? "(Blanks)" : val, isChecked);
+                cb.setOpaque(false);
+                cb.putClientProperty("value", val);
+                cb.addActionListener(e -> {
+                    boolean allChecked = true;
+                    for (javax.swing.JCheckBox b : valueBoxes) {
+                        if (!b.isSelected()) {
+                            allChecked = false;
+                            break;
+                        }
+                    }
+                    selectAllBox.setSelected(allChecked);
+                });
+                valueBoxes.add(cb);
+                listPanel.add(cb);
+            }
+            
+            scrollPane.setPreferredSize(new Dimension(220, 150));
+            centerPanel.add(scrollPane, BorderLayout.CENTER);
+            add(centerPanel, BorderLayout.CENTER);
+            
+            // Search field filtering
+            searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                private void filterCheckboxes() {
+                    String query = searchField.getText().trim().toLowerCase();
+                    for (javax.swing.JCheckBox cb : valueBoxes) {
+                        String text = cb.getText().toLowerCase();
+                        cb.setVisible(text.contains(query));
+                    }
+                    listPanel.revalidate();
+                    listPanel.repaint();
+                }
+                @Override
+                public void insertUpdate(javax.swing.event.DocumentEvent e) { filterCheckboxes(); }
+                @Override
+                public void removeUpdate(javax.swing.event.DocumentEvent e) { filterCheckboxes(); }
+                @Override
+                public void changedUpdate(javax.swing.event.DocumentEvent e) { filterCheckboxes(); }
+            });
+            
+            // OK / Cancel Buttons
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+            btnPanel.setOpaque(false);
+            
+            ModernButton okBtn = new ModernButton("OK");
+            okBtn.addActionListener(e -> {
+                java.util.Set<String> selected = new java.util.HashSet<>();
+                boolean allSelected = true;
+                for (javax.swing.JCheckBox cb : valueBoxes) {
+                    if (cb.isSelected()) {
+                        selected.add((String) cb.getClientProperty("value"));
+                    } else {
+                        allSelected = false;
+                    }
+                }
+                
+                if (allSelected) {
+                    columnFilters.remove(colIndex);
+                } else {
+                    columnFilters.put(colIndex, selected);
+                }
+                
+                refreshSessionsTable();
+                ColumnFilterPopup.this.setVisible(false);
+            });
+            
+            ModernButton cancelBtn = new ModernButton("Cancel");
+            cancelBtn.addActionListener(e -> ColumnFilterPopup.this.setVisible(false));
+            
+            btnPanel.add(okBtn);
+            btnPanel.add(cancelBtn);
+            add(btnPanel, BorderLayout.SOUTH);
+            
+            // Apply theme
+            ThemeManager.applyTheme(this, ThemeManager.getColors(ThemeManager.loadTheme()));
+        }
     }
 }

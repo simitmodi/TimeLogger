@@ -61,7 +61,7 @@ public class PieChartPanel extends JPanel {
         int height = getHeight();
 
         if (values.isEmpty()) {
-            g2.setColor(Color.GRAY);
+            g2.setColor(textColor);
             g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
             String msg = "No tracking data available";
             int msgW = g2.getFontMetrics().stringWidth(msg);
@@ -106,10 +106,17 @@ public class PieChartPanel extends JPanel {
             g2.setColor(colors.get(i));
             g2.fillRect(legendX, legendY, 10, 10);
 
-            g2.setColor(Color.DARK_GRAY);
+            g2.setColor(textColor);
             String percentLabel = String.format("%s (%.0f%%)", labels.get(i), (double) values.get(i) * 100.0 / total);
             g2.drawString(percentLabel, legendX + 16, legendY + 9);
             legendY += 18;
         }
+    }
+
+    private Color textColor = Color.DARK_GRAY;
+
+    public void setTextColor(Color color) {
+        this.textColor = color;
+        repaint();
     }
 }

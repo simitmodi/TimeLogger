@@ -13,6 +13,11 @@ public class Main {
 
             AppFrame frame = new AppFrame();
             frame.setVisible(true);
+
+            // Trigger GC shortly after UI rendering to reclaim startup/layout garbage
+            javax.swing.Timer gcTimer = new javax.swing.Timer(1000, e -> System.gc());
+            gcTimer.setRepeats(false);
+            gcTimer.start();
         });
     }
 }

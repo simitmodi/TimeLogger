@@ -6,7 +6,15 @@ target/
 # Runtime data
 sessions.log
 subjects.txt
+theme.txt
+goal.txt
 
 # OS/editor
 .DS_Store
 Thumbs.db
+
+# IDE settings
+.idea/
+
+# Exported files
+*.xlsx
