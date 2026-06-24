@@ -99,6 +99,7 @@ public class AppFrame extends JFrame {
     private final Timer timerTick;
 
     private MiniWindow miniWindow = null;
+    private JTabbedPane tabs;
 
     private final JComboBox<String> logsSubjectFilterCombo = new JComboBox<>();
     private final JComboBox<String> logsModeFilterCombo = new JComboBox<>(new String[]{"All Modes", "Stopwatch", "Timer"});
@@ -235,7 +236,7 @@ public class AppFrame extends JFrame {
     }
 
     private JTabbedPane createTabs() {
-        JTabbedPane tabs = new JTabbedPane();
+        this.tabs = new JTabbedPane();
         tabs.addTab("Stopwatch", createStopwatchPanel());
         tabs.addTab("Timer", createTimerPanel());
         tabs.addTab("Logs", createLogsPanel());
@@ -528,10 +529,110 @@ public class AppFrame extends JFrame {
             }
         });
 
+        ModernButton resumeSelectedButton = new ModernButton("Resume Session");
+        resumeSelectedButton.addActionListener(e -> {
+            if (stopwatchStarted || timerStarted) {
+                JOptionPane.showMessageDialog(this,
+                    "A tracking session is currently active. Please stop and save or reset your current session before resuming a past log.",
+                    "Session Active",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            int selectedRow = logsTable.getSelectedRow();
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(this,
+                    "Please select a log entry to resume.",
+                    "No Selection",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            int modelRow = logsTable.convertRowIndexToModel(selectedRow);
+            if (modelRow >= 0 && modelRow < displayedSessions.size()) {
+                SessionRecord selectedSession = displayedSessions.get(modelRow);
+                String subject = selectedSession.getSubject();
+                
+                // Add subject dynamically if it doesn't exist in current subjects
+                if (subject != null && !subject.isBlank() && !subjects.contains(subject)) {
+                    subjects.add(subject);
+                    subjectsListModel.addElement(subject);
+                    storageService.saveSubjects(subjects);
+                    refreshStopwatchSubjects();
+                    refreshTimerSubjects();
+                    refreshLogsSubjects();
+                }
+
+                if (selectedSession.getType() == SessionRecord.SessionType.STOPWATCH) {
+                    // Populate stopwatch fields
+                    stopwatchSubjectCombo.setSelectedItem(subject);
+                    
+                    String desc = selectedSession.getDescription() != null ? selectedSession.getDescription() : "";
+                    if (desc.startsWith("Questions: ")) {
+                        stopwatchActivityTypeCombo.setSelectedItem("Questions");
+                        String content = desc.substring("Questions: ".length());
+                        int commaIndex = content.indexOf(",");
+                        String qType = "";
+                        String qDesc = "";
+                        if (commaIndex != -1) {
+                            qType = content.substring(0, commaIndex).trim();
+                            qDesc = content.substring(commaIndex + 1).trim();
+                        } else {
+                            qType = content.trim();
+                        }
+                        stopwatchQuestionTypeCombo.setSelectedItem(qType);
+                        stopwatchQuestionDescField.setText(qDesc);
+                    } else if (desc.startsWith("Lecture: ")) {
+                        stopwatchActivityTypeCombo.setSelectedItem("Lecture");
+                        String content = desc.substring("Lecture: ".length());
+                        int commaIndex = content.indexOf(",");
+                        String ch = "";
+                        String lec = "";
+                        if (commaIndex != -1) {
+                            String chPart = content.substring(0, commaIndex).trim();
+                            String lecPart = content.substring(commaIndex + 1).trim();
+                            if (chPart.startsWith("Ch ")) {
+                                ch = chPart.substring(3).trim();
+                            }
+                            if (lecPart.startsWith("Lec ")) {
+                                lec = lecPart.substring(4).trim();
+                            }
+                        }
+                        stopwatchChapterField.setText(ch);
+                        stopwatchLectureField.setText(lec);
+                    } else {
+                        stopwatchActivityTypeCombo.setSelectedItem("General");
+                        stopwatchActivityField.setText(desc);
+                    }
+                    
+                    // Switch to Stopwatch tab and start
+                    tabs.setSelectedIndex(0);
+                    startStopwatch();
+                } else if (selectedSession.getType() == SessionRecord.SessionType.TIMER) {
+                    // Populate timer fields
+                    timerSubjectCombo.setSelectedItem(subject);
+                    
+                    long totalSeconds = selectedSession.getDurationSeconds();
+                    int hours = (int) (totalSeconds / 3600);
+                    int minutes = (int) ((totalSeconds % 3600) / 60);
+                    int seconds = (int) (totalSeconds % 60);
+                    
+                    hoursSpinner.setValue(hours);
+                    minutesSpinner.setValue(minutes);
+                    secondsSpinner.setValue(seconds);
+                    
+                    // Switch to Timer tab and start
+                    tabs.setSelectedIndex(1);
+                    startTimer();
+                }
+            }
+        });
+
         exportWeeklyButton.addActionListener(e -> exportWeeklyReport());
         exportMonthlyButton.addActionListener(e -> exportMonthlyReport());
 
         actions.add(refreshButton);
+        actions.add(resumeSelectedButton);
         actions.add(deleteSelectedButton);
         actions.add(clearAllButton);
         actions.add(exportWeeklyButton);
@@ -1276,6 +1377,9 @@ public class AppFrame extends JFrame {
                 return true;
             })
             .collect(Collectors.toList());
+
+        // Reverse to show newest (last logged) first by default
+        java.util.Collections.reverse(sessions);
 
         // Update the displayed sessions reference
         displayedSessions.clear();
