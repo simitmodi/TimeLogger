@@ -58,6 +58,7 @@ public class AppFrame extends JFrame {
     // --- System Tray and Notifications ---
     private TrayIcon trayIcon = null;
     private boolean trayIconAdded = false;
+    private int currentSessionPauseCount = 0;
     private boolean stopwatchBreakNotificationSent = false;
     private boolean timerBreakNotificationSent = false;
     private boolean goalNotificationSentToday = false;
@@ -75,6 +76,8 @@ public class AppFrame extends JFrame {
     private final JLabel insightDetailBreakRatio = new JLabel("-");
     private final JLabel insightDetailMidSessionBreaks = new JLabel("-");
     private final JLabel insightDetailEfficiency = new JLabel("-");
+    private final JLabel insightDetailAttentionSpan = new JLabel("-");
+    private final JLabel insightDetailFocusScore = new JLabel("-");
     private javax.swing.JCheckBox enableNotificationsCheckbox;
     private javax.swing.JCheckBox enableBreakRemindersCheckbox;
 
@@ -1347,6 +1350,7 @@ public class AppFrame extends JFrame {
             }
             stopwatchStarted = true;
             stopwatchBreakNotificationSent = false;
+            currentSessionPauseCount = 0;
         }
 
         if (!stopwatchRunning) {
@@ -1380,6 +1384,7 @@ public class AppFrame extends JFrame {
         stopwatchElapsedMillis += (System.nanoTime() - stopwatchStartNano) / 1_000_000;
         stopwatchRunning = false;
         stopwatchUiTimer.stop();
+        currentSessionPauseCount++;
         updateStopwatchDisplay();
         updateStopwatchButtons();
     }
@@ -1418,13 +1423,15 @@ public class AppFrame extends JFrame {
                 if (s.getStartTime().equals(resumedSession.getStartTime()) &&
                     s.getSubject().equalsIgnoreCase(resumedSession.getSubject()) &&
                     s.getType() == resumedSession.getType()) {
+                    int totalPauses = resumedSession.getPauseCount() + currentSessionPauseCount;
                     allSessions.set(i, new SessionRecord(
                         SessionRecord.SessionType.STOPWATCH,
                         stopwatchSubject,
                         stopwatchSessionStart,
                         end,
                         durationSeconds,
-                        activityDetail
+                        activityDetail,
+                        totalPauses
                     ));
                     updated = true;
                     break;
@@ -1439,7 +1446,8 @@ public class AppFrame extends JFrame {
                     stopwatchSessionStart,
                     end,
                     durationSeconds,
-                    activityDetail
+                    activityDetail,
+                    currentSessionPauseCount
                 ));
             }
             resumedSession = null;
@@ -1450,7 +1458,8 @@ public class AppFrame extends JFrame {
                 stopwatchSessionStart,
                 end,
                 durationSeconds,
-                activityDetail
+                activityDetail,
+                currentSessionPauseCount
             ));
         }
 
@@ -1553,6 +1562,7 @@ public class AppFrame extends JFrame {
             }
             timerStarted = true;
             timerBreakNotificationSent = false;
+            currentSessionPauseCount = 0;
         }
 
         if (!timerRunning) {
@@ -1572,6 +1582,7 @@ public class AppFrame extends JFrame {
             timerTick.start();
         } else {
             timerTick.stop();
+            currentSessionPauseCount++;
         }
         updateTimerButtons();
     }
@@ -1664,13 +1675,15 @@ public class AppFrame extends JFrame {
                     s.getSubject().equalsIgnoreCase(resumedSession.getSubject()) &&
                     s.getType() == resumedSession.getType()) {
                     long newDuration = resumedSession.getDurationSeconds() + elapsedSeconds;
+                    int totalPauses = resumedSession.getPauseCount() + currentSessionPauseCount;
                     allSessions.set(i, new SessionRecord(
                         SessionRecord.SessionType.TIMER,
                         subject,
                         timerSessionStart,
                         LocalDateTime.now(),
                         newDuration,
-                        resumedSession.getDescription()
+                        resumedSession.getDescription(),
+                        totalPauses
                     ));
                     updated = true;
                     break;
@@ -1685,7 +1698,8 @@ public class AppFrame extends JFrame {
                     timerSessionStart != null ? timerSessionStart : LocalDateTime.now(),
                     LocalDateTime.now(),
                     elapsedSeconds,
-                    resumedSession.getDescription()
+                    resumedSession.getDescription(),
+                    currentSessionPauseCount
                 ));
             }
             resumedSession = null;
@@ -1695,7 +1709,9 @@ public class AppFrame extends JFrame {
                 subject,
                 timerSessionStart != null ? timerSessionStart : LocalDateTime.now(),
                 LocalDateTime.now(),
-                elapsedSeconds
+                elapsedSeconds,
+                "",
+                currentSessionPauseCount
             ));
         }
 
@@ -2863,6 +2879,8 @@ public class AppFrame extends JFrame {
         addDetailRow(detailsCard, "Average Break Ratio:", insightDetailBreakRatio, gbc, 3);
         addDetailRow(detailsCard, "Total Mid-Session Breaks:", insightDetailMidSessionBreaks, gbc, 4);
         addDetailRow(detailsCard, "Study Session Efficiency:", insightDetailEfficiency, gbc, 5);
+        addDetailRow(detailsCard, "Avg Attention Span:", insightDetailAttentionSpan, gbc, 6);
+        addDetailRow(detailsCard, "Cognitive Focus Score:", insightDetailFocusScore, gbc, 7);
         
         middleRow.add(detailsCard);
 
@@ -3030,6 +3048,26 @@ public class AppFrame extends JFrame {
         long totalMidSessionBreaks = Math.max(0, totalSpanSeconds - totalActiveSeconds);
         double efficiencyVal = totalSpanSeconds > 0 ? ((double) totalActiveSeconds / totalSpanSeconds) * 100.0 : 100.0;
 
+        // Attention span & focus score calculation
+        double avgAttentionSpanMin = 0;
+        double avgFocusScore = 0;
+        if (!recentSessions.isEmpty()) {
+            long totalActiveSec = recentSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
+            long totalBlocks = recentSessions.stream().mapToLong(s -> getSessionPauseCount(s) + 1).sum();
+            avgAttentionSpanMin = (totalActiveSec / (double) totalBlocks) / 60.0;
+            avgFocusScore = recentSessions.stream().mapToInt(this::calculateSessionFocusScore).average().orElse(0.0);
+        }
+
+        // Format focus score text with classification
+        String focusText = "-";
+        if (!recentSessions.isEmpty()) {
+            String focusLevel = "Fragmented";
+            if (avgFocusScore >= 85) focusLevel = "Deep Focus";
+            else if (avgFocusScore >= 70) focusLevel = "Good Focus";
+            else if (avgFocusScore >= 50) focusLevel = "Moderate Focus";
+            focusText = String.format("%d/100 (%s)", (int) avgFocusScore, focusLevel);
+        }
+
         // Update Metrics Labels
         insightDetailHours.setText(String.format("%.1f hrs", totalHours));
         insightDetailDays.setText(consecutiveActiveDays + " days");
@@ -3037,20 +3075,35 @@ public class AppFrame extends JFrame {
         insightDetailBreakRatio.setText(String.format("%.1f%%", avgBreakRatio * 100));
         insightDetailMidSessionBreaks.setText(formatDuration(totalMidSessionBreaks));
         insightDetailEfficiency.setText(String.format("%.1f%%", efficiencyVal));
+        insightDetailAttentionSpan.setText(!recentSessions.isEmpty() ? String.format("%.1f mins", avgAttentionSpanMin) : "-");
+        insightDetailFocusScore.setText(focusText);
 
         // Update Warnings & Recommendations
         warningsContainer.removeAll();
-        boolean hasWarnings = false;
+        boolean hasMessages = false;
 
         if (totalHours > 56.0) {
             addWarningLabel("⚠️ Extreme Load: Tracked over 56 hours. High fatigue risk.");
-            hasWarnings = true;
+            hasMessages = true;
         }
         if (activeDaysCount > 0 && avgBreakRatio < 0.15) {
             addWarningLabel("⚠️ Insufficient Breaks: Break ratio is under 15%. Rest more.");
-            hasWarnings = true;
+            hasMessages = true;
         }
-        if (!hasWarnings) {
+        if (!recentSessions.isEmpty()) {
+            if (avgAttentionSpanMin < 25.0) {
+                addTipLabel("💡 Focus Tip: Short focus blocks. Try Pomodoro (25 mins focus / 5 mins break).");
+                hasMessages = true;
+            } else if (avgAttentionSpanMin > 90.0) {
+                addTipLabel("💡 Focus Tip: Very long focus blocks. Remember to take a rest every hour.");
+                hasMessages = true;
+            }
+            if (avgFocusScore < 60.0) {
+                addTipLabel("💡 Focus Tip: Fragmented study. Remove phone/tab distractions to stay in the zone.");
+                hasMessages = true;
+            }
+        }
+        if (!hasMessages) {
             JLabel okayLabel = new JLabel("✓ Your tracking habits look balanced and healthy!");
             okayLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
             okayLabel.setForeground(colors.accent);
@@ -3067,6 +3120,58 @@ public class AppFrame extends JFrame {
         lbl.setForeground(java.awt.Color.RED);
         lbl.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         warningsContainer.add(lbl);
+    }
+
+    private void addTipLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 12));
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+        lbl.setForeground(colors.accent);
+        lbl.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        warningsContainer.add(lbl);
+    }
+
+    private int getSessionPauseCount(SessionRecord s) {
+        if (s.getPauseCount() > 0) {
+            return s.getPauseCount();
+        }
+        long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+        long active = s.getDurationSeconds();
+        long breakSec = Math.max(0, span - active);
+        if (breakSec == 0) {
+            return 0;
+        }
+        return (int) Math.max(1, breakSec / 300);
+    }
+
+    private int calculateSessionFocusScore(SessionRecord s) {
+        long activeSec = s.getDurationSeconds();
+        if (activeSec < 60) return 100; // Ignore tiny sessions under a minute
+        
+        int pauses = getSessionPauseCount(s);
+        double avgBlockMin = (activeSec / (double) (pauses + 1)) / 60.0;
+        
+        double blockScore;
+        if (avgBlockMin >= 25 && avgBlockMin <= 50) {
+            blockScore = 100;
+        } else if (avgBlockMin < 25) {
+            blockScore = Math.max(20, 100 - (25 - avgBlockMin) * 3);
+        } else {
+            blockScore = Math.max(50, 100 - (avgBlockMin - 50) * 0.5);
+        }
+        
+        long spanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+        double efficiency = spanSec > 0 ? ((double) activeSec / spanSec) * 100.0 : 100.0;
+        
+        double efficiencyScore;
+        if (efficiency >= 80) {
+            efficiencyScore = 100;
+        } else {
+            efficiencyScore = Math.max(20, 100 - (80 - efficiency) * 1.5);
+        }
+        
+        double score = (blockScore * 0.6) + (efficiencyScore * 0.4);
+        return (int) Math.max(0, Math.min(100, score));
     }
 
     private void checkGoalAchievement(long activeSeconds) {

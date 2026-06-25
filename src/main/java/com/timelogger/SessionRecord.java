@@ -17,18 +17,24 @@ public class SessionRecord {
     private final LocalDateTime endTime;
     private final long durationSeconds;
     private final String description;
+    private final int pauseCount;
 
     public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds) {
-        this(type, subject, startTime, endTime, durationSeconds, "");
+        this(type, subject, startTime, endTime, durationSeconds, "", 0);
     }
 
     public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds, String description) {
+        this(type, subject, startTime, endTime, durationSeconds, description, 0);
+    }
+
+    public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds, String description, int pauseCount) {
         this.type = type;
         this.subject = subject;
         this.startTime = startTime;
         this.endTime = endTime;
         this.durationSeconds = durationSeconds;
         this.description = description;
+        this.pauseCount = pauseCount;
     }
 
     public SessionType getType() {
@@ -55,6 +61,10 @@ public class SessionRecord {
         return description;
     }
 
+    public int getPauseCount() {
+        return pauseCount;
+    }
+
     public String toStorageLine() {
         return String.join("|",
             type.name(),
@@ -62,7 +72,8 @@ public class SessionRecord {
             startTime.format(DATE_FORMAT),
             endTime.format(DATE_FORMAT),
             String.valueOf(durationSeconds),
-            sanitize(description)
+            sanitize(description),
+            String.valueOf(pauseCount)
         );
     }
 
@@ -78,8 +89,14 @@ public class SessionRecord {
         LocalDateTime end = LocalDateTime.parse(parts[3], DATE_FORMAT);
         long duration = Long.parseLong(parts[4]);
         String description = parts.length > 5 ? parts[5] : "";
+        int pauseCount = 0;
+        if (parts.length > 6 && !parts[6].isEmpty()) {
+            try {
+                pauseCount = Integer.parseInt(parts[6]);
+            } catch (NumberFormatException ignored) {}
+        }
 
-        return new SessionRecord(type, subject, start, end, duration, description);
+        return new SessionRecord(type, subject, start, end, duration, description, pauseCount);
     }
 
     private static String sanitize(String value) {
