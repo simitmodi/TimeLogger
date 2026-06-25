@@ -19,6 +19,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SpinnerDateModel;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.KeyStroke;
@@ -27,6 +28,7 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -100,9 +102,17 @@ public class AppFrame extends JFrame {
 
     private MiniWindow miniWindow = null;
     private JTabbedPane tabs;
+    private SessionRecord resumedSession = null;
+    private String previousAnalysisPeriod = "All Time";
+    private LocalDate customAnalysisStartDate = null;
+    private LocalDate customAnalysisEndDate = null;
 
     private final JComboBox<String> logsSubjectFilterCombo = new JComboBox<>();
     private final JComboBox<String> logsModeFilterCombo = new JComboBox<>(new String[]{"All Modes", "Stopwatch", "Timer"});
+    private final JComboBox<String> logsDateFilterCombo = new JComboBox<>(new String[]{"All Dates", "Today", "Yesterday", "This Week", "This Month", "Custom Range..."});
+    private String previousLogsDatePeriod = "All Dates";
+    private LocalDate customLogsStartDate = null;
+    private LocalDate customLogsEndDate = null;
     private final JTextField logsSearchField = new JTextField(15);
     private final List<SessionRecord> displayedSessions = new java.util.ArrayList<>();
     private JTable logsTable;
@@ -142,7 +152,7 @@ public class AppFrame extends JFrame {
     private final HeatmapPanel heatmapPanel = new HeatmapPanel();
 
     private final JComboBox<String> analysisPeriodCombo = new JComboBox<>(new String[]{
-        "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days"
+        "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days", "Custom Range..."
     });
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
@@ -406,6 +416,8 @@ public class AppFrame extends JFrame {
         filterBar.add(logsSubjectFilterCombo);
         filterBar.add(new JLabel("Mode:"));
         filterBar.add(logsModeFilterCombo);
+        filterBar.add(new JLabel("Date:"));
+        filterBar.add(logsDateFilterCombo);
         filterBar.add(new JLabel("Search Activity:"));
         filterBar.add(logsSearchField);
 
@@ -413,6 +425,17 @@ public class AppFrame extends JFrame {
         clearFiltersBtn.addActionListener(e -> {
             logsSubjectFilterCombo.setSelectedIndex(0);
             logsModeFilterCombo.setSelectedIndex(0);
+            if (logsDateFilterCombo != null) {
+                // Remove custom date range items if any
+                for (int i = 0; i < logsDateFilterCombo.getItemCount(); i++) {
+                    String item = logsDateFilterCombo.getItemAt(i);
+                    if (item != null && item.startsWith("Custom: ")) {
+                        logsDateFilterCombo.removeItemAt(i);
+                        break;
+                    }
+                }
+                logsDateFilterCombo.setSelectedItem("All Dates");
+            }
             logsSearchField.setText("");
             columnFilters.clear();
             if (logsTable.getRowSorter() != null) {
@@ -425,6 +448,7 @@ public class AppFrame extends JFrame {
         // Add action listeners to trigger table refresh
         logsSubjectFilterCombo.addActionListener(e -> refreshSessionsTable());
         logsModeFilterCombo.addActionListener(e -> refreshSessionsTable());
+        logsDateFilterCombo.addActionListener(e -> refreshSessionsTable());
         
         logsSearchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
@@ -551,6 +575,7 @@ public class AppFrame extends JFrame {
             int modelRow = logsTable.convertRowIndexToModel(selectedRow);
             if (modelRow >= 0 && modelRow < displayedSessions.size()) {
                 SessionRecord selectedSession = displayedSessions.get(modelRow);
+                this.resumedSession = selectedSession;
                 String subject = selectedSession.getSubject();
                 
                 // Add subject dynamically if it doesn't exist in current subjects
@@ -605,9 +630,18 @@ public class AppFrame extends JFrame {
                         stopwatchActivityField.setText(desc);
                     }
                     
-                    // Switch to Stopwatch tab and start
+                    // Setup stopwatch state for resumption but don't start running yet
+                    stopwatchSubject = subject;
+                    stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
+                    stopwatchSessionStart = selectedSession.getStartTime();
+                    stopwatchElapsedMillis = selectedSession.getDurationSeconds() * 1000;
+                    stopwatchStarted = true;
+                    stopwatchRunning = false;
+                    updateStopwatchDisplay();
+                    updateStopwatchButtons();
+                    
+                    // Switch to Stopwatch tab
                     tabs.setSelectedIndex(0);
-                    startStopwatch();
                 } else if (selectedSession.getType() == SessionRecord.SessionType.TIMER) {
                     // Populate timer fields
                     timerSubjectCombo.setSelectedItem(subject);
@@ -621,9 +655,17 @@ public class AppFrame extends JFrame {
                     minutesSpinner.setValue(minutes);
                     secondsSpinner.setValue(seconds);
                     
-                    // Switch to Timer tab and start
+                    // Setup timer state for resumption but don't start running yet
+                    timerTotalSeconds = totalSeconds;
+                    timerRemainingSeconds = totalSeconds;
+                    timerSessionStart = selectedSession.getStartTime();
+                    timerStarted = true;
+                    timerRunning = false;
+                    timerTimeLabel.setText(formatDuration(totalSeconds));
+                    updateTimerButtons();
+                    
+                    // Switch to Timer tab
                     tabs.setSelectedIndex(1);
-                    startTimer();
                 }
             }
         });
@@ -631,12 +673,16 @@ public class AppFrame extends JFrame {
         exportWeeklyButton.addActionListener(e -> exportWeeklyReport());
         exportMonthlyButton.addActionListener(e -> exportMonthlyReport());
 
+        ModernButton exportCustomButton = new ModernButton("Export Custom Range...");
+        exportCustomButton.addActionListener(e -> exportCustomRangeReport());
+
         actions.add(refreshButton);
         actions.add(resumeSelectedButton);
         actions.add(deleteSelectedButton);
         actions.add(clearAllButton);
         actions.add(exportWeeklyButton);
         actions.add(exportMonthlyButton);
+        actions.add(exportCustomButton);
 
         exportInfoLabel.setHorizontalAlignment(SwingConstants.LEFT);
 
@@ -807,6 +853,9 @@ public class AppFrame extends JFrame {
 
         // Bottom Controls
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        ModernButton exportAnalysisBtn = new ModernButton("Export Current View");
+        exportAnalysisBtn.addActionListener(e -> exportCurrentAnalysisView());
+        bottomPanel.add(exportAnalysisBtn);
         ModernButton refreshBtn = new ModernButton("Refresh Analysis");
         refreshBtn.addActionListener(e -> refreshAnalysis());
         bottomPanel.add(refreshBtn);
@@ -882,6 +931,70 @@ public class AppFrame extends JFrame {
         String period = (String) analysisPeriodCombo.getSelectedItem();
         if (period == null) period = "All Time";
         
+        if ("Custom Range...".equals(period)) {
+            DateRange dr = promptDateRange("Select Analysis Date Range", LocalDate.now().minusDays(7), LocalDate.now());
+            if (dr != null) {
+                customAnalysisStartDate = dr.startDate;
+                customAnalysisEndDate = dr.endDate;
+                String customLabel = "Custom: " + dr.startDate + " to " + dr.endDate;
+                
+                // Temporarily disable action listener of combobox to avoid infinite loops
+                java.awt.event.ActionListener[] listeners = analysisPeriodCombo.getActionListeners();
+                for (java.awt.event.ActionListener l : listeners) {
+                    analysisPeriodCombo.removeActionListener(l);
+                }
+                
+                // Remove existing custom items starting with "Custom: "
+                for (int i = 0; i < analysisPeriodCombo.getItemCount(); i++) {
+                    String item = analysisPeriodCombo.getItemAt(i);
+                    if (item != null && item.startsWith("Custom: ")) {
+                        analysisPeriodCombo.removeItemAt(i);
+                        break;
+                    }
+                }
+                
+                // Insert new custom item before "Custom Range..."
+                int insertIndex = analysisPeriodCombo.getItemCount() - 1; // before "Custom Range..."
+                analysisPeriodCombo.insertItemAt(customLabel, insertIndex);
+                analysisPeriodCombo.setSelectedItem(customLabel);
+                previousAnalysisPeriod = customLabel;
+                
+                // Re-enable action listeners
+                for (java.awt.event.ActionListener l : listeners) {
+                    analysisPeriodCombo.addActionListener(l);
+                }
+                
+                period = customLabel;
+            } else {
+                // User cancelled, revert to previous selection
+                java.awt.event.ActionListener[] listeners = analysisPeriodCombo.getActionListeners();
+                for (java.awt.event.ActionListener l : listeners) {
+                    analysisPeriodCombo.removeActionListener(l);
+                }
+                analysisPeriodCombo.setSelectedItem(previousAnalysisPeriod);
+                for (java.awt.event.ActionListener l : listeners) {
+                    analysisPeriodCombo.addActionListener(l);
+                }
+                return;
+            }
+        } else if (!period.startsWith("Custom: ")) {
+            previousAnalysisPeriod = period;
+            customAnalysisStartDate = null;
+            customAnalysisEndDate = null;
+        } else {
+            // It is the custom label, e.g., "Custom: 2026-06-01 to 2026-06-10"
+            // Extract dates
+            try {
+                String datesPart = period.substring("Custom: ".length());
+                String[] parts = datesPart.split(" to ");
+                customAnalysisStartDate = LocalDate.parse(parts[0]);
+                customAnalysisEndDate = LocalDate.parse(parts[1]);
+            } catch (Exception e) {
+                customAnalysisStartDate = null;
+                customAnalysisEndDate = null;
+            }
+        }
+        
         final String finalPeriod = period;
         LocalDate today = LocalDate.now();
         List<SessionRecord> sessions = rawSessions.stream()
@@ -902,6 +1015,9 @@ public class AppFrame extends JFrame {
                     case "Last 30 Days":
                         return !sDate.isBefore(today.minusDays(29)) && !sDate.isAfter(today);
                     default:
+                        if (finalPeriod.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
+                            return !sDate.isBefore(customAnalysisStartDate) && !sDate.isAfter(customAnalysisEndDate);
+                        }
                         return true; // All Time
                 }
             })
@@ -1078,8 +1194,19 @@ public class AppFrame extends JFrame {
 
             stopwatchSubject = selectedSubject;
             stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
-            stopwatchSessionStart = LocalDateTime.now();
-            stopwatchElapsedMillis = 0;
+            if (resumedSession != null) {
+                if (resumedSession.getType() == SessionRecord.SessionType.STOPWATCH) {
+                    stopwatchSessionStart = resumedSession.getStartTime();
+                    stopwatchElapsedMillis = resumedSession.getDurationSeconds() * 1000;
+                } else {
+                    resumedSession = null;
+                    stopwatchSessionStart = LocalDateTime.now();
+                    stopwatchElapsedMillis = 0;
+                }
+            } else {
+                stopwatchSessionStart = LocalDateTime.now();
+                stopwatchElapsedMillis = 0;
+            }
             stopwatchStarted = true;
         }
 
@@ -1144,14 +1271,49 @@ public class AppFrame extends JFrame {
             activityDetail = "Lecture: Ch " + ch + ", Lec " + lec;
         }
 
-        storageService.appendSession(new SessionRecord(
-            SessionRecord.SessionType.STOPWATCH,
-            stopwatchSubject,
-            stopwatchSessionStart,
-            end,
-            durationSeconds,
-            activityDetail
-        ));
+        if (resumedSession != null && resumedSession.getType() == SessionRecord.SessionType.STOPWATCH) {
+            List<SessionRecord> allSessions = storageService.loadSessions();
+            boolean updated = false;
+            for (int i = 0; i < allSessions.size(); i++) {
+                SessionRecord s = allSessions.get(i);
+                if (s.getStartTime().equals(resumedSession.getStartTime()) &&
+                    s.getSubject().equalsIgnoreCase(resumedSession.getSubject()) &&
+                    s.getType() == resumedSession.getType()) {
+                    allSessions.set(i, new SessionRecord(
+                        SessionRecord.SessionType.STOPWATCH,
+                        stopwatchSubject,
+                        stopwatchSessionStart,
+                        end,
+                        durationSeconds,
+                        activityDetail
+                    ));
+                    updated = true;
+                    break;
+                }
+            }
+            if (updated) {
+                storageService.saveSessions(allSessions);
+            } else {
+                storageService.appendSession(new SessionRecord(
+                    SessionRecord.SessionType.STOPWATCH,
+                    stopwatchSubject,
+                    stopwatchSessionStart,
+                    end,
+                    durationSeconds,
+                    activityDetail
+                ));
+            }
+            resumedSession = null;
+        } else {
+            storageService.appendSession(new SessionRecord(
+                SessionRecord.SessionType.STOPWATCH,
+                stopwatchSubject,
+                stopwatchSessionStart,
+                end,
+                durationSeconds,
+                activityDetail
+            ));
+        }
 
         refreshSessionsTable();
         refreshExportAvailability();
@@ -1169,6 +1331,7 @@ public class AppFrame extends JFrame {
         stopwatchStartNano = 0;
         stopwatchSubject = null;
         stopwatchSessionStart = null;
+        resumedSession = null;
         stopwatchUiTimer.stop();
         stopwatchSubjectLabel.setText("Subject: -");
         stopwatchTimeLabel.setText("00:00:00");
@@ -1226,7 +1389,16 @@ public class AppFrame extends JFrame {
                 return;
             }
 
-            timerSessionStart = LocalDateTime.now();
+            if (resumedSession != null) {
+                if (resumedSession.getType() == SessionRecord.SessionType.TIMER) {
+                    timerSessionStart = resumedSession.getStartTime();
+                } else {
+                    resumedSession = null;
+                    timerSessionStart = LocalDateTime.now();
+                }
+            } else {
+                timerSessionStart = LocalDateTime.now();
+            }
             timerStarted = true;
         }
 
@@ -1280,6 +1452,7 @@ public class AppFrame extends JFrame {
         timerTotalSeconds = 0;
         timerRemainingSeconds = 0;
         timerSessionStart = null;
+        resumedSession = null;
         timerTimeLabel.setText("00:00:00");
         updateTimerButtons();
     }
@@ -1315,13 +1488,49 @@ public class AppFrame extends JFrame {
             subject = "General";
         }
 
-        storageService.appendSession(new SessionRecord(
-            SessionRecord.SessionType.TIMER,
-            subject,
-            timerSessionStart != null ? timerSessionStart : LocalDateTime.now(),
-            LocalDateTime.now(),
-            elapsedSeconds
-        ));
+        if (resumedSession != null && resumedSession.getType() == SessionRecord.SessionType.TIMER) {
+            List<SessionRecord> allSessions = storageService.loadSessions();
+            boolean updated = false;
+            for (int i = 0; i < allSessions.size(); i++) {
+                SessionRecord s = allSessions.get(i);
+                if (s.getStartTime().equals(resumedSession.getStartTime()) &&
+                    s.getSubject().equalsIgnoreCase(resumedSession.getSubject()) &&
+                    s.getType() == resumedSession.getType()) {
+                    long newDuration = resumedSession.getDurationSeconds() + elapsedSeconds;
+                    allSessions.set(i, new SessionRecord(
+                        SessionRecord.SessionType.TIMER,
+                        subject,
+                        timerSessionStart,
+                        LocalDateTime.now(),
+                        newDuration,
+                        resumedSession.getDescription()
+                    ));
+                    updated = true;
+                    break;
+                }
+            }
+            if (updated) {
+                storageService.saveSessions(allSessions);
+            } else {
+                storageService.appendSession(new SessionRecord(
+                    SessionRecord.SessionType.TIMER,
+                    subject,
+                    timerSessionStart != null ? timerSessionStart : LocalDateTime.now(),
+                    LocalDateTime.now(),
+                    elapsedSeconds,
+                    resumedSession.getDescription()
+                ));
+            }
+            resumedSession = null;
+        } else {
+            storageService.appendSession(new SessionRecord(
+                SessionRecord.SessionType.TIMER,
+                subject,
+                timerSessionStart != null ? timerSessionStart : LocalDateTime.now(),
+                LocalDateTime.now(),
+                elapsedSeconds
+            ));
+        }
 
         refreshSessionsTable();
         refreshExportAvailability();
@@ -1334,10 +1543,78 @@ public class AppFrame extends JFrame {
         
         String selectedSubject = logsSubjectFilterCombo != null ? (String) logsSubjectFilterCombo.getSelectedItem() : "All Subjects";
         String selectedMode = logsModeFilterCombo != null ? (String) logsModeFilterCombo.getSelectedItem() : "All Modes";
+        String datePeriod = logsDateFilterCombo != null ? (String) logsDateFilterCombo.getSelectedItem() : "All Dates";
+        if (datePeriod == null) datePeriod = "All Dates";
+
+        if ("Custom Range...".equals(datePeriod)) {
+            DateRange dr = promptDateRange("Select Log Date Range", LocalDate.now().minusDays(7), LocalDate.now());
+            if (dr != null) {
+                customLogsStartDate = dr.startDate;
+                customLogsEndDate = dr.endDate;
+                String customLabel = "Custom: " + dr.startDate + " to " + dr.endDate;
+                
+                // Temporarily disable action listener of combobox to avoid infinite loops
+                java.awt.event.ActionListener[] listeners = logsDateFilterCombo.getActionListeners();
+                for (java.awt.event.ActionListener l : listeners) {
+                    logsDateFilterCombo.removeActionListener(l);
+                }
+                
+                // Remove existing custom items starting with "Custom: "
+                for (int i = 0; i < logsDateFilterCombo.getItemCount(); i++) {
+                    String item = logsDateFilterCombo.getItemAt(i);
+                    if (item != null && item.startsWith("Custom: ")) {
+                        logsDateFilterCombo.removeItemAt(i);
+                        break;
+                    }
+                }
+                
+                // Insert new custom item before "Custom Range..."
+                int insertIndex = logsDateFilterCombo.getItemCount() - 1; // before "Custom Range..."
+                logsDateFilterCombo.insertItemAt(customLabel, insertIndex);
+                logsDateFilterCombo.setSelectedItem(customLabel);
+                previousLogsDatePeriod = customLabel;
+                
+                // Re-enable action listeners
+                for (java.awt.event.ActionListener l : listeners) {
+                    logsDateFilterCombo.addActionListener(l);
+                }
+                
+                datePeriod = customLabel;
+            } else {
+                // User cancelled, revert to previous selection
+                java.awt.event.ActionListener[] listeners = logsDateFilterCombo.getActionListeners();
+                for (java.awt.event.ActionListener l : listeners) {
+                    logsDateFilterCombo.removeActionListener(l);
+                }
+                logsDateFilterCombo.setSelectedItem(previousLogsDatePeriod);
+                for (java.awt.event.ActionListener l : listeners) {
+                    logsDateFilterCombo.addActionListener(l);
+                }
+                return;
+            }
+        } else if (!datePeriod.startsWith("Custom: ")) {
+            previousLogsDatePeriod = datePeriod;
+            customLogsStartDate = null;
+            customLogsEndDate = null;
+        } else {
+            // It is the custom label, extract dates
+            try {
+                String datesPart = datePeriod.substring("Custom: ".length());
+                String[] parts = datesPart.split(" to ");
+                customLogsStartDate = LocalDate.parse(parts[0]);
+                customLogsEndDate = LocalDate.parse(parts[1]);
+            } catch (Exception e) {
+                customLogsStartDate = null;
+                customLogsEndDate = null;
+            }
+        }
+
         String searchKeyword = logsSearchField != null ? logsSearchField.getText().trim().toLowerCase() : "";
 
         java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
         java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.MEDIUM);
+
+        final String finalDatePeriod = datePeriod;
 
         List<SessionRecord> sessions = rawSessions.stream()
             .filter(session -> {
@@ -1354,6 +1631,31 @@ public class AppFrame extends JFrame {
                     }
                     if (selectedMode.equalsIgnoreCase("Timer") && session.getType() != SessionRecord.SessionType.TIMER) {
                         return false;
+                    }
+                }
+                // Filter by Date Period
+                if (finalDatePeriod != null && !finalDatePeriod.equals("All Dates")) {
+                    LocalDate sDate = session.getStartTime().toLocalDate();
+                    LocalDate today = LocalDate.now();
+                    switch (finalDatePeriod) {
+                        case "Today":
+                            if (!sDate.equals(today)) return false;
+                            break;
+                        case "Yesterday":
+                            if (!sDate.equals(today.minusDays(1))) return false;
+                            break;
+                        case "This Week":
+                            LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                            if (sDate.isBefore(startOfWeek) || sDate.isAfter(today)) return false;
+                            break;
+                        case "This Month":
+                            if (sDate.getYear() != today.getYear() || sDate.getMonth() != today.getMonth()) return false;
+                            break;
+                        default:
+                            if (finalDatePeriod.startsWith("Custom: ") && customLogsStartDate != null && customLogsEndDate != null) {
+                                if (sDate.isBefore(customLogsStartDate) || sDate.isAfter(customLogsEndDate)) return false;
+                            }
+                            break;
                     }
                 }
                 // Filter by search query on description
@@ -1386,7 +1688,7 @@ public class AppFrame extends JFrame {
         displayedSessions.addAll(sessions);
 
         for (SessionRecord session : sessions) {
-            String dateStr = session.getStartTime().toLocalDate().format(dateFormatter);
+            String dateStr = getSessionValueForColumn(session, 0, dateFormatter, timeFormatter);
             String startTimeStr = session.getStartTime().toLocalTime().format(timeFormatter);
             String endTimeStr = session.getEndTime().toLocalTime().format(timeFormatter);
             sessionsTableModel.addRow(new Object[]{
@@ -1549,6 +1851,264 @@ public class AppFrame extends JFrame {
             "Exported report to:\n" + outputFile,
             "Export Complete",
             JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void exportCustomRangeReport() {
+        DateRange dr = promptDateRange("Select Export Date Range", LocalDate.now().minusDays(7), LocalDate.now());
+        if (dr == null) {
+            return;
+        }
+
+        List<SessionRecord> sessions = storageService.loadSessions().stream()
+            .filter(session -> {
+                LocalDate sessionDate = session.getEndTime().toLocalDate();
+                return !sessionDate.isBefore(dr.startDate) && !sessionDate.isAfter(dr.endDate);
+            })
+            .collect(Collectors.toList());
+
+        if (sessions.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "No sessions found for the selected date range (" + dr.startDate + " to " + dr.endDate + ") to export.",
+                "No Data",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        String period = dr.startDate + " to " + dr.endDate;
+        String fileName = "timelog-custom-" + dr.startDate + "_to_" + dr.endDate + ".xlsx";
+        Path outputFile = storageService.getAppDirectory().resolve(fileName);
+        exportService.exportReport(outputFile, sessions, period);
+
+        JOptionPane.showMessageDialog(this,
+            "Exported report to:\n" + outputFile,
+            "Export Complete",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void exportCurrentAnalysisView() {
+        List<SessionRecord> rawSessions = storageService.loadSessions();
+        
+        String period = (String) analysisPeriodCombo.getSelectedItem();
+        if (period == null) period = "All Time";
+        
+        final String finalPeriod = period;
+        LocalDate today = LocalDate.now();
+        List<SessionRecord> sessions = rawSessions.stream()
+            .filter(s -> {
+                LocalDate sDate = s.getStartTime().toLocalDate();
+                switch (finalPeriod) {
+                    case "Today":
+                        return sDate.equals(today);
+                    case "Yesterday":
+                        return sDate.equals(today.minusDays(1));
+                    case "This Week":
+                        LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                        return !sDate.isBefore(startOfWeek) && !sDate.isAfter(today);
+                    case "Last 7 Days":
+                        return !sDate.isBefore(today.minusDays(6)) && !sDate.isAfter(today);
+                    case "This Month":
+                        return sDate.getYear() == today.getYear() && sDate.getMonth() == today.getMonth();
+                    case "Last 30 Days":
+                        return !sDate.isBefore(today.minusDays(29)) && !sDate.isAfter(today);
+                    default:
+                        if (finalPeriod.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
+                            return !sDate.isBefore(customAnalysisStartDate) && !sDate.isAfter(customAnalysisEndDate);
+                        }
+                        return true; // All Time
+                }
+            })
+            .collect(Collectors.toList());
+
+        if (sessions.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "No sessions found for the current period (" + period + ") to export.",
+                "No Data",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        String safePeriod = period.replace(":", "").replace(" ", "_");
+        String fileName = "timelog-analysis-" + safePeriod + ".xlsx";
+        Path outputFile = storageService.getAppDirectory().resolve(fileName);
+        exportService.exportReport(outputFile, sessions, period);
+
+        JOptionPane.showMessageDialog(this,
+            "Exported report to:\n" + outputFile,
+            "Export Complete",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static class DateRange {
+        LocalDate startDate;
+        LocalDate endDate;
+    }
+
+    private DateRange promptDateRange(String title, LocalDate defaultStart, LocalDate defaultEnd) {
+        JPanel panel = new JPanel(new GridLayout(1, 2, 20, 0));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel startPanel = new JPanel(new BorderLayout(6, 6));
+        startPanel.setOpaque(false);
+        JLabel startLabel = new JLabel("Start: " + defaultStart.toString(), SwingConstants.CENTER);
+        startLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        startPanel.add(startLabel, BorderLayout.NORTH);
+        
+        final LocalDate[] selectedStart = {defaultStart};
+        final LocalDate[] selectedEnd = {defaultEnd};
+
+        CalendarPanel startCalendar = new CalendarPanel(defaultStart, date -> {
+            selectedStart[0] = date;
+            startLabel.setText("Start: " + date.toString());
+        });
+        startCalendar.setPreferredSize(new Dimension(280, 240));
+        startPanel.add(startCalendar, BorderLayout.CENTER);
+
+        JPanel endPanel = new JPanel(new BorderLayout(6, 6));
+        endPanel.setOpaque(false);
+        JLabel endLabel = new JLabel("End: " + defaultEnd.toString(), SwingConstants.CENTER);
+        endLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        endPanel.add(endLabel, BorderLayout.NORTH);
+
+        CalendarPanel endCalendar = new CalendarPanel(defaultEnd, date -> {
+            selectedEnd[0] = date;
+            endLabel.setText("End: " + date.toString());
+        });
+        endCalendar.setPreferredSize(new Dimension(280, 240));
+        endPanel.add(endCalendar, BorderLayout.CENTER);
+
+        panel.add(startPanel);
+        panel.add(endPanel);
+
+        ThemeManager.applyTheme(panel, ThemeManager.getColors(ThemeManager.loadTheme()));
+
+        int result = JOptionPane.showConfirmDialog(miniWindow != null ? miniWindow : this,
+            panel,
+            title,
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            LocalDate startLocal = selectedStart[0];
+            LocalDate endLocal = selectedEnd[0];
+
+            if (startLocal.isAfter(endLocal)) {
+                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+                    "Start date cannot be after end date.",
+                    "Invalid Range",
+                    JOptionPane.WARNING_MESSAGE);
+                return null;
+            }
+
+            DateRange dr = new DateRange();
+            dr.startDate = startLocal;
+            dr.endDate = endLocal;
+            return dr;
+        }
+        return null;
+    }
+
+    private static class CalendarPanel extends JPanel {
+        private LocalDate selectedDate;
+        private YearMonth displayedMonth;
+        
+        private final JLabel monthLabel = new JLabel("", SwingConstants.CENTER);
+        private final JPanel daysGrid = new JPanel(new java.awt.GridLayout(0, 7, 2, 2));
+        private final java.util.function.Consumer<LocalDate> onDateSelected;
+
+        public CalendarPanel(LocalDate initialDate, java.util.function.Consumer<LocalDate> onDateSelected) {
+            this.selectedDate = initialDate;
+            this.displayedMonth = YearMonth.from(initialDate);
+            this.onDateSelected = onDateSelected;
+
+            setLayout(new BorderLayout(4, 4));
+            
+            JPanel header = new JPanel(new BorderLayout());
+            header.setOpaque(false);
+            
+            ModernButton prevBtn = new ModernButton("<");
+            prevBtn.setPreferredSize(new Dimension(32, 24));
+            prevBtn.setMargin(new Insets(0, 0, 0, 0));
+            prevBtn.addActionListener(e -> {
+                displayedMonth = displayedMonth.minusMonths(1);
+                updateCalendar();
+            });
+
+            ModernButton nextBtn = new ModernButton(">");
+            nextBtn.setPreferredSize(new Dimension(32, 24));
+            nextBtn.setMargin(new Insets(0, 0, 0, 0));
+            nextBtn.addActionListener(e -> {
+                displayedMonth = displayedMonth.plusMonths(1);
+                updateCalendar();
+            });
+
+            monthLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            header.add(prevBtn, BorderLayout.WEST);
+            header.add(monthLabel, BorderLayout.CENTER);
+            header.add(nextBtn, BorderLayout.EAST);
+            add(header, BorderLayout.NORTH);
+
+            daysGrid.setOpaque(false);
+            add(daysGrid, BorderLayout.CENTER);
+            
+            updateCalendar();
+        }
+
+        private void updateCalendar() {
+            daysGrid.removeAll();
+            
+            String monthName = displayedMonth.getMonth().name().charAt(0) + displayedMonth.getMonth().name().substring(1).toLowerCase();
+            monthLabel.setText(monthName + " " + displayedMonth.getYear());
+
+            String[] headers = {"M", "T", "W", "T", "F", "S", "S"};
+            for (String h : headers) {
+                JLabel lbl = new JLabel(h, SwingConstants.CENTER);
+                lbl.setFont(new Font("SansSerif", Font.BOLD, 11));
+                daysGrid.add(lbl);
+            }
+
+            LocalDate firstOfMonth = displayedMonth.atDay(1);
+            int dayOfWeek = firstOfMonth.getDayOfWeek().getValue();
+            
+            for (int i = 1; i < dayOfWeek; i++) {
+                daysGrid.add(new JLabel(""));
+            }
+
+            int daysInMonth = displayedMonth.lengthOfMonth();
+            ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+            
+            for (int day = 1; day <= daysInMonth; day++) {
+                LocalDate date = displayedMonth.atDay(day);
+                
+                ModernButton dayBtn = new ModernButton(String.valueOf(day));
+                dayBtn.setPreferredSize(new Dimension(32, 26));
+                dayBtn.setMargin(new Insets(0, 0, 0, 0));
+                dayBtn.setFont(new Font("SansSerif", Font.PLAIN, 11));
+                dayBtn.putClientProperty("themeOverride", true);
+                
+                if (date.equals(selectedDate)) {
+                    dayBtn.setBackground(colors.accent);
+                    dayBtn.setForeground(java.awt.Color.WHITE);
+                    dayBtn.setBorderColor(colors.accent);
+                } else {
+                    dayBtn.setBackground(colors.cardBg);
+                    dayBtn.setForeground(colors.text);
+                    dayBtn.setBorderColor(colors.border);
+                }
+
+                dayBtn.addActionListener(e -> {
+                    selectedDate = date;
+                    updateCalendar();
+                    if (onDateSelected != null) {
+                        onDateSelected.accept(date);
+                    }
+                });
+                
+                daysGrid.add(dayBtn);
+            }
+
+            daysGrid.revalidate();
+            daysGrid.repaint();
+        }
     }
 
     private void updateTimerButtons() {
@@ -1776,7 +2336,10 @@ public class AppFrame extends JFrame {
 
     private String getSessionValueForColumn(SessionRecord session, int col, java.time.format.DateTimeFormatter dateFormatter, java.time.format.DateTimeFormatter timeFormatter) {
         switch (col) {
-            case 0: return session.getStartTime().toLocalDate().format(dateFormatter);
+            case 0: {
+                String dayOfWeekName = session.getStartTime().getDayOfWeek().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault());
+                return session.getStartTime().toLocalDate().format(dateFormatter) + " (" + dayOfWeekName + ")";
+            }
             case 1: return session.getType().name();
             case 2: return session.getSubject();
             case 3: return session.getDescription();

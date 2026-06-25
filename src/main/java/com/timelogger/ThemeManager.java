@@ -112,6 +112,20 @@ public class ThemeManager {
     public static void applyTheme(Component c, ThemeColors colors) {
         if (c == null) return;
 
+        if (c instanceof JComponent) {
+            JComponent jc = (JComponent) c;
+            if (Boolean.TRUE.equals(jc.getClientProperty("themeOverride"))) {
+                // Recurse down children if container
+                if (c instanceof Container) {
+                    Container container = (Container) c;
+                    for (Component child : container.getComponents()) {
+                        applyTheme(child, colors);
+                    }
+                }
+                return;
+            }
+        }
+
         if (c instanceof JFrame) {
             // Set global UIManager defaults so dialogs, scrollbars, text fields, and combo boxes align.
             javax.swing.UIManager.put("Panel.background", colors.bg);
