@@ -3094,8 +3094,8 @@ public class AppFrame extends JFrame {
             if (avgAttentionSpanMin < 25.0) {
                 addTipLabel("💡 Focus Tip: Short focus blocks. Try Pomodoro (25 mins focus / 5 mins break).");
                 hasMessages = true;
-            } else if (avgAttentionSpanMin > 90.0) {
-                addTipLabel("💡 Focus Tip: Very long focus blocks. Remember to take a rest every hour.");
+            } else if (avgAttentionSpanMin > 120.0) {
+                addTipLabel("💡 Focus Tip: Very long focus blocks (> 2 hrs). Remember to take a rest every hour.");
                 hasMessages = true;
             }
             if (avgFocusScore < 60.0) {
@@ -3152,12 +3152,12 @@ public class AppFrame extends JFrame {
         double avgBlockMin = (activeSec / (double) (pauses + 1)) / 60.0;
         
         double blockScore;
-        if (avgBlockMin >= 25 && avgBlockMin <= 50) {
+        if (avgBlockMin >= 25 && avgBlockMin <= 120) {
             blockScore = 100;
         } else if (avgBlockMin < 25) {
             blockScore = Math.max(20, 100 - (25 - avgBlockMin) * 3);
         } else {
-            blockScore = Math.max(50, 100 - (avgBlockMin - 50) * 0.5);
+            blockScore = Math.max(50, 100 - (avgBlockMin - 120) * 0.5);
         }
         
         long spanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
