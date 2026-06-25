@@ -1199,10 +1199,10 @@ public class AppFrame extends JFrame {
         
         // Subject breakdown
         subjectAnalysisModel.setRowCount(0);
-        java.util.Map<String, Long> bySubject = rawSessions.stream()
+        java.util.Map<String, Long> bySubjectAllTime = rawSessions.stream()
             .collect(Collectors.groupingBy(SessionRecord::getSubject, Collectors.summingLong(SessionRecord::getDurationSeconds)));
         
-        bySubject.entrySet().stream()
+        bySubjectAllTime.entrySet().stream()
             .sorted(java.util.Map.Entry.comparingByKey())
             .forEach(entry -> {
                 subjectAnalysisModel.addRow(new Object[]{
@@ -1210,9 +1210,13 @@ public class AppFrame extends JFrame {
                     formatDuration(entry.getValue())
                 });
             });
-        subjectPieChart.setData(bySubject);
 
-        String mostActive = bySubject.entrySet().stream()
+        // Subject distribution chart and most active subject metrics (Filtered)
+        java.util.Map<String, Long> bySubjectFiltered = sessions.stream()
+            .collect(Collectors.groupingBy(SessionRecord::getSubject, Collectors.summingLong(SessionRecord::getDurationSeconds)));
+        subjectPieChart.setData(bySubjectFiltered);
+
+        String mostActive = bySubjectFiltered.entrySet().stream()
             .max(java.util.Map.Entry.comparingByValue())
             .map(entry -> entry.getKey() + " (" + formatDuration(entry.getValue()) + ")")
             .orElse("None");
