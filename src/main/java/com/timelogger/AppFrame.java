@@ -57,6 +57,7 @@ public class AppFrame extends JFrame {
 
     // --- System Tray and Notifications ---
     private TrayIcon trayIcon = null;
+    private boolean trayIconAdded = false;
     private boolean stopwatchBreakNotificationSent = false;
     private boolean timerBreakNotificationSent = false;
     private boolean goalNotificationSentToday = false;
@@ -247,7 +248,7 @@ public class AppFrame extends JFrame {
         this.addWindowStateListener(e -> {
             if ((e.getNewState() & JFrame.ICONIFIED) == JFrame.ICONIFIED) {
                 System.gc();
-                if (SystemTray.isSupported()) {
+                if (SystemTray.isSupported() && trayIconAdded) {
                     setVisible(false);
                 }
             }
@@ -2775,6 +2776,7 @@ public class AppFrame extends JFrame {
             
             try {
                 tray.add(trayIcon);
+                trayIconAdded = true;
             } catch (Exception e) {
                 e.printStackTrace();
             }

@@ -48,7 +48,14 @@ Get-ChildItem -Path (Join-Path $root "src\main\java") -Recurse -File | Where-Obj
 
 $jarPath = Join-Path $distDir "time-logger.jar"
 if (Test-Path $jarPath) {
-    Remove-Item -Force $jarPath
+    try {
+        Remove-Item -Force $jarPath
+    } catch {
+        Write-Host "JAR is locked. Terminating running TimeLogger instances..."
+        Stop-Process -Name java, javaw -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+        Remove-Item -Force $jarPath
+    }
 }
 
 if ($hasJarExe) {
