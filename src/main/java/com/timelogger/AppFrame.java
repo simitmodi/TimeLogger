@@ -927,7 +927,7 @@ public class AppFrame extends JFrame {
         JTable subjectTable = new JTable(subjectAnalysisModel);
         subjectTable.setRowHeight(24);
         JPanel subjectCard = new JPanel(new BorderLayout(8, 8));
-        subjectCard.setBorder(BorderFactory.createTitledBorder("By Subject"));
+        subjectCard.setBorder(BorderFactory.createTitledBorder("By Subject (All Time)"));
         JScrollPane subjectScroll = new JScrollPane(subjectTable);
         subjectScroll.setPreferredSize(new Dimension(200, 300));
         subjectCard.add(subjectScroll, BorderLayout.CENTER);
@@ -935,7 +935,7 @@ public class AppFrame extends JFrame {
         JTable chapterTable = new JTable(chapterAnalysisModel);
         chapterTable.setRowHeight(24);
         JPanel chapterCard = new JPanel(new BorderLayout(8, 8));
-        chapterCard.setBorder(BorderFactory.createTitledBorder("By Chapter in Subject"));
+        chapterCard.setBorder(BorderFactory.createTitledBorder("By Chapter in Subject (All Time)"));
         JScrollPane chapterScroll = new JScrollPane(chapterTable);
         chapterScroll.setPreferredSize(new Dimension(200, 300));
         chapterCard.add(chapterScroll, BorderLayout.CENTER);
@@ -949,7 +949,7 @@ public class AppFrame extends JFrame {
         activityCard.add(activityScroll, BorderLayout.CENTER);
 
         JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
-        dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week"));
+        dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week (Last 7 Days)"));
         dayOfWeekCard.add(weeklyBarChartPanel, BorderLayout.CENTER);
 
         JPanel timelineCard = new JPanel(new BorderLayout(8, 8));
@@ -1199,7 +1199,7 @@ public class AppFrame extends JFrame {
         
         // Subject breakdown
         subjectAnalysisModel.setRowCount(0);
-        java.util.Map<String, Long> bySubject = sessions.stream()
+        java.util.Map<String, Long> bySubject = rawSessions.stream()
             .collect(Collectors.groupingBy(SessionRecord::getSubject, Collectors.summingLong(SessionRecord::getDurationSeconds)));
         
         bySubject.entrySet().stream()
@@ -1225,7 +1225,7 @@ public class AppFrame extends JFrame {
         // Chapter breakdown
         chapterAnalysisModel.setRowCount(0);
         java.util.Map<String, Long> byChapter = new java.util.TreeMap<>();
-        for (SessionRecord session : sessions) {
+        for (SessionRecord session : rawSessions) {
             String desc = session.getDescription();
             if (desc.startsWith("Lecture: ")) {
                 String chName = "Unknown Chapter";
@@ -1280,8 +1280,14 @@ public class AppFrame extends JFrame {
         activityAnalysisModel.addRow(new Object[]{"Previous Year Questions", formatDuration(pyqSec)});
         activityAnalysisModel.addRow(new Object[]{"General / Other", formatDuration(generalSec)});
 
-        // Day of Week breakdown
-        java.util.Map<java.time.DayOfWeek, Long> byDay = sessions.stream()
+        // Day of Week breakdown (Always Last 7 Days)
+        List<SessionRecord> last7DaysSessions = rawSessions.stream()
+            .filter(s -> {
+                LocalDate sDate = s.getStartTime().toLocalDate();
+                return !sDate.isBefore(today.minusDays(6)) && !sDate.isAfter(today);
+            })
+            .collect(Collectors.toList());
+        java.util.Map<java.time.DayOfWeek, Long> byDay = last7DaysSessions.stream()
             .collect(Collectors.groupingBy(
                 s -> s.getStartTime().getDayOfWeek(),
                 Collectors.summingLong(SessionRecord::getDurationSeconds)
