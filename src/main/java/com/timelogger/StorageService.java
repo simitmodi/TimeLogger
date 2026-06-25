@@ -138,6 +138,48 @@ public class StorageService {
         }
     }
 
+    public boolean loadNotificationEnabled() {
+        Path file = appDirectory.resolve("notifications_enabled.txt");
+        try {
+            if (!Files.exists(file)) {
+                saveNotificationEnabled(true);
+                return true;
+            }
+            return Boolean.parseBoolean(Files.readString(file, StandardCharsets.UTF_8).trim());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    public void saveNotificationEnabled(boolean enabled) {
+        Path file = appDirectory.resolve("notifications_enabled.txt");
+        try {
+            Files.writeString(file, String.valueOf(enabled), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {}
+    }
+
+    public boolean loadBreakRemindersEnabled() {
+        Path file = appDirectory.resolve("break_reminders_enabled.txt");
+        try {
+            if (!Files.exists(file)) {
+                saveBreakRemindersEnabled(true);
+                return true;
+            }
+            return Boolean.parseBoolean(Files.readString(file, StandardCharsets.UTF_8).trim());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    public void saveBreakRemindersEnabled(boolean enabled) {
+        Path file = appDirectory.resolve("break_reminders_enabled.txt");
+        try {
+            Files.writeString(file, String.valueOf(enabled), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {}
+    }
+
     private void initialize() {
         try {
             Files.createDirectories(appDirectory);
@@ -147,8 +189,56 @@ public class StorageService {
             if (!Files.exists(sessionsFile)) {
                 Files.createFile(sessionsFile);
             }
+            performAutoBackup();
         } catch (IOException e) {
             throw new RuntimeException("Unable to initialize storage", e);
         }
+    }
+
+    private void performAutoBackup() {
+        Path backupsDir = appDirectory.resolve("backups");
+        try {
+            Files.createDirectories(backupsDir);
+            
+            String todayStr = java.time.LocalDate.now().toString();
+            Path backupZipFile = backupsDir.resolve("timelogger_backup_" + todayStr + ".zip");
+            if (Files.exists(backupZipFile)) {
+                return;
+            }
+
+            if (Files.exists(sessionsFile) || Files.exists(subjectsFile)) {
+                try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(backupZipFile))) {
+                    addToZip(zos, sessionsFile, "sessions.log");
+                    addToZip(zos, subjectsFile, "subjects.txt");
+                }
+            }
+
+            try (java.util.stream.Stream<Path> files = Files.list(backupsDir)) {
+                List<Path> backupFiles = files
+                    .filter(p -> p.getFileName().toString().startsWith("timelogger_backup_") && p.getFileName().toString().endsWith(".zip"))
+                    .sorted((p1, p2) -> {
+                        try {
+                            return Files.getLastModifiedTime(p1).compareTo(Files.getLastModifiedTime(p2));
+                        } catch (IOException e) {
+                            return 0;
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+                while (backupFiles.size() > 7) {
+                    Files.deleteIfExists(backupFiles.remove(0));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void addToZip(java.util.zip.ZipOutputStream zos, Path file, String zipEntryName) throws IOException {
+        if (!Files.exists(file)) return;
+        java.util.zip.ZipEntry entry = new java.util.zip.ZipEntry(zipEntryName);
+        zos.putNextEntry(entry);
+        Files.copy(file, zos);
+        zos.closeEntry();
     }
 }

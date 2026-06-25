@@ -8,6 +8,9 @@ sessions.log
 subjects.txt
 theme.txt
 goal.txt
+notifications_enabled.txt
+break_reminders_enabled.txt
+
 
 # OS/editor
 .DS_Store
@@ -18,3 +21,10 @@ Thumbs.db
 
 # Exported files
 *.xlsx
+
+# Backups
+backups/
+
+# Crash logs
+hs_err_pid*.log
+

@@ -32,6 +32,16 @@ import java.awt.GridLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.SystemTray;
+import java.awt.TrayIcon;
+import java.awt.Image;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.GradientPaint;
+import java.awt.Color;
+import java.awt.FontMetrics;
+import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -44,6 +54,28 @@ import java.util.stream.Collectors;
 public class AppFrame extends JFrame {
     private final StorageService storageService = new StorageService();
     private final ExportService exportService = new ExportService();
+
+    // --- System Tray and Notifications ---
+    private TrayIcon trayIcon = null;
+    private boolean stopwatchBreakNotificationSent = false;
+    private boolean timerBreakNotificationSent = false;
+    private boolean goalNotificationSentToday = false;
+    private LocalDate lastGoalCheckDate = LocalDate.now();
+
+    // --- Insights Tab UI Elements ---
+    private final JLabel burnoutRiskLabel = new JLabel("0%", SwingConstants.CENTER);
+    private final JLabel burnoutStatusLabel = new JLabel("Calculating...", SwingConstants.CENTER);
+    private final JLabel productivityIndexLabel = new JLabel("0/100", SwingConstants.CENTER);
+    private final javax.swing.JProgressBar productivityProgress = new javax.swing.JProgressBar(0, 100);
+    private final JPanel warningsContainer = new JPanel();
+    private final JLabel insightDetailHours = new JLabel("-");
+    private final JLabel insightDetailDays = new JLabel("-");
+    private final JLabel insightDetailLateNights = new JLabel("-");
+    private final JLabel insightDetailBreakRatio = new JLabel("-");
+    private final JLabel insightDetailMidSessionBreaks = new JLabel("-");
+    private final JLabel insightDetailEfficiency = new JLabel("-");
+    private javax.swing.JCheckBox enableNotificationsCheckbox;
+    private javax.swing.JCheckBox enableBreakRemindersCheckbox;
 
     final List<String> subjects;
     private final DefaultListModel<String> subjectsListModel = new DefaultListModel<>();
@@ -150,6 +182,8 @@ public class AppFrame extends JFrame {
     };
     private final PieChartPanel subjectPieChart = new PieChartPanel();
     private final HeatmapPanel heatmapPanel = new HeatmapPanel();
+    private final WeeklyBarChartPanel weeklyBarChartPanel = new WeeklyBarChartPanel();
+    private final DailyTimelinePanel dailyTimelinePanel = new DailyTimelinePanel();
 
     private final JComboBox<String> analysisPeriodCombo = new JComboBox<>(new String[]{
         "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days", "Custom Range..."
@@ -157,6 +191,8 @@ public class AppFrame extends JFrame {
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
     private final JLabel mostActiveSubjectLabel = new JLabel("Most Active: -", SwingConstants.CENTER);
+    private final JLabel studyEfficiencyLabel = new JLabel("Study Efficiency: -", SwingConstants.CENTER);
+    private final JLabel midSessionBreakLabel = new JLabel("Mid-Session Breaks: -", SwingConstants.CENTER);
 
     private final JLabel goalProgressLabel = new JLabel("Today: 0 / 0 min (0%)", SwingConstants.CENTER);
     private final javax.swing.JProgressBar goalProgressBar = new javax.swing.JProgressBar(0, 100);
@@ -199,10 +235,21 @@ public class AppFrame extends JFrame {
         // Apply saved theme on startup
         updateTheme(ThemeManager.loadTheme());
 
-        // Minimize memory footprint when window is iconified (minimized)
+        initSystemTray();
+
+        this.tabs.addChangeListener(e -> {
+            if (tabs.getSelectedIndex() == tabs.indexOfTab("Insights")) {
+                refreshInsights();
+            }
+        });
+
+        // Minimize memory footprint and hide to system tray when minimized
         this.addWindowStateListener(e -> {
             if ((e.getNewState() & JFrame.ICONIFIED) == JFrame.ICONIFIED) {
                 System.gc();
+                if (SystemTray.isSupported()) {
+                    setVisible(false);
+                }
             }
         });
     }
@@ -251,6 +298,7 @@ public class AppFrame extends JFrame {
         tabs.addTab("Timer", createTimerPanel());
         tabs.addTab("Logs", createLogsPanel());
         tabs.addTab("Analysis", createAnalysisPanel());
+        tabs.addTab("Insights", createInsightsPanel());
         tabs.addTab("Subjects", createSubjectsPanel());
         return tabs;
     }
@@ -272,6 +320,61 @@ public class AppFrame extends JFrame {
         JPanel generalCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         generalCard.add(new JLabel("Desc: "));
         generalCard.add(stopwatchActivityField);
+
+        javax.swing.JPopupMenu autocompletePopup = new javax.swing.JPopupMenu();
+        autocompletePopup.setFocusable(false);
+        stopwatchActivityField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void updateAutocomplete() {
+                String typed = stopwatchActivityField.getText().trim();
+                if (typed.isEmpty()) {
+                    autocompletePopup.setVisible(false);
+                    return;
+                }
+                String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+                if (subject == null) {
+                    autocompletePopup.setVisible(false);
+                    return;
+                }
+                List<SessionRecord> allSessions = storageService.loadSessions();
+                List<String> matches = allSessions.stream()
+                    .filter(s -> s.getSubject().equalsIgnoreCase(subject) && s.getDescription() != null)
+                    .map(SessionRecord::getDescription)
+                    .filter(d -> !d.isEmpty() && d.toLowerCase().contains(typed.toLowerCase()))
+                    .distinct()
+                    .limit(5)
+                    .collect(Collectors.toList());
+                if (matches.isEmpty()) {
+                    autocompletePopup.setVisible(false);
+                    return;
+                }
+                autocompletePopup.removeAll();
+                for (String m : matches) {
+                    javax.swing.JMenuItem item = new javax.swing.JMenuItem(m);
+                    item.addActionListener(e -> {
+                        stopwatchActivityField.setText(m);
+                        autocompletePopup.setVisible(false);
+                    });
+                    autocompletePopup.add(item);
+                }
+                if (stopwatchActivityField.isShowing()) {
+                    autocompletePopup.show(stopwatchActivityField, 0, stopwatchActivityField.getHeight());
+                }
+            }
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                if (stopwatchActivityField.hasFocus()) {
+                    javax.swing.SwingUtilities.invokeLater(this::updateAutocomplete);
+                }
+            }
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                if (stopwatchActivityField.hasFocus()) {
+                    javax.swing.SwingUtilities.invokeLater(this::updateAutocomplete);
+                }
+            }
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {}
+        });
 
         JPanel questionsCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         questionsCard.add(new JLabel("Type: "));
@@ -790,7 +893,7 @@ public class AppFrame extends JFrame {
         goalCard.add(progressPanel);
         goalCard.add(streakLabel);
         
-        JPanel sessionsCard = new JPanel(new java.awt.GridLayout(2, 1, 4, 4));
+        JPanel sessionsCard = new JPanel(new java.awt.GridLayout(3, 1, 4, 4));
         sessionsCard.setBorder(BorderFactory.createTitledBorder("Total Sessions"));
         totalSessionsValueLabel.setFont(new Font("SansSerif", Font.BOLD, 36));
         totalSessionsValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -798,8 +901,11 @@ public class AppFrame extends JFrame {
         avgSessionLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
         avgSessionLabel.setHorizontalAlignment(SwingConstants.CENTER);
         sessionsCard.add(avgSessionLabel);
+        studyEfficiencyLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        studyEfficiencyLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        sessionsCard.add(studyEfficiencyLabel);
         
-        JPanel durationCard = new JPanel(new java.awt.GridLayout(3, 1, 2, 2));
+        JPanel durationCard = new JPanel(new java.awt.GridLayout(4, 1, 2, 2));
         durationCard.setBorder(BorderFactory.createTitledBorder("Total Duration"));
         totalDurationValueLabel.setFont(new Font("Monospaced", Font.BOLD, 28));
         totalDurationValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -810,6 +916,9 @@ public class AppFrame extends JFrame {
         mostActiveSubjectLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         mostActiveSubjectLabel.setHorizontalAlignment(SwingConstants.CENTER);
         durationCard.add(mostActiveSubjectLabel);
+        midSessionBreakLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        midSessionBreakLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        durationCard.add(midSessionBreakLabel);
 
         JPanel chartCard = new JPanel(new BorderLayout(8, 8));
         chartCard.setBorder(BorderFactory.createTitledBorder("Subject Distribution"));
@@ -839,13 +948,13 @@ public class AppFrame extends JFrame {
         activityScroll.setPreferredSize(new Dimension(200, 140));
         activityCard.add(activityScroll, BorderLayout.CENTER);
 
-        JTable dayOfWeekTable = new JTable(dayOfWeekAnalysisModel);
-        dayOfWeekTable.setRowHeight(24);
         JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
         dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week"));
-        JScrollPane dayOfWeekScroll = new JScrollPane(dayOfWeekTable);
-        dayOfWeekScroll.setPreferredSize(new Dimension(200, 180));
-        dayOfWeekCard.add(dayOfWeekScroll, BorderLayout.CENTER);
+        dayOfWeekCard.add(weeklyBarChartPanel, BorderLayout.CENTER);
+
+        JPanel timelineCard = new JPanel(new BorderLayout(8, 8));
+        timelineCard.setBorder(BorderFactory.createTitledBorder("Today's Session Timeline"));
+        timelineCard.add(dailyTimelinePanel, BorderLayout.CENTER);
 
         JPanel heatmapCard = new JPanel(new BorderLayout(8, 8));
         heatmapCard.setBorder(BorderFactory.createTitledBorder("Activity Heatmap"));
@@ -905,8 +1014,13 @@ public class AppFrame extends JFrame {
         gbc.gridx = 2; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(dayOfWeekCard, gbc);
 
-        // Row 4: Activity Heatmap (Spans all 3 columns, 1 row)
+        // Row 4: Daily Session Timeline (Spans all 3 columns, 1 row)
         gbc.gridy = 4;
+        gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
+        mainContent.add(timelineCard, gbc);
+
+        // Row 5: Activity Heatmap (Spans all 3 columns, 1 row)
+        gbc.gridy = 5;
         gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(heatmapCard, gbc);
 
@@ -1047,6 +1161,25 @@ public class AppFrame extends JFrame {
             activeDayAvgLabel.setText("Active Day Avg: 00:00:00");
         }
 
+        // Mid-session breaks & study efficiency
+        long totalSpanSeconds = 0;
+        long totalActiveSeconds = 0;
+        for (SessionRecord s : sessions) {
+            long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+            totalSpanSeconds += span;
+            totalActiveSeconds += s.getDurationSeconds();
+        }
+        long totalMidSessionBreaks = Math.max(0, totalSpanSeconds - totalActiveSeconds);
+        double efficiency = totalSpanSeconds > 0 ? ((double) totalActiveSeconds / totalSpanSeconds) * 100.0 : 100.0;
+
+        if (totalSessions > 0) {
+            midSessionBreakLabel.setText(String.format("Mid-Session Breaks: %s", formatDuration(totalMidSessionBreaks)));
+            studyEfficiencyLabel.setText(String.format("Study Efficiency: %.1f%%", efficiency));
+        } else {
+            midSessionBreakLabel.setText("Mid-Session Breaks: 00:00:00");
+            studyEfficiencyLabel.setText("Study Efficiency: 100.0%");
+        }
+
         // Goal & Streak update
         GoalStreakStats stats = calculateGoalStreakStats();
         goalProgressLabel.setText(String.format("Today: %d / %d mins (%d%%)", 
@@ -1148,21 +1281,15 @@ public class AppFrame extends JFrame {
         activityAnalysisModel.addRow(new Object[]{"General / Other", formatDuration(generalSec)});
 
         // Day of Week breakdown
-        dayOfWeekAnalysisModel.setRowCount(0);
         java.util.Map<java.time.DayOfWeek, Long> byDay = sessions.stream()
             .collect(Collectors.groupingBy(
                 s -> s.getStartTime().getDayOfWeek(),
                 Collectors.summingLong(SessionRecord::getDurationSeconds)
             ));
-        
-        for (java.time.DayOfWeek day : java.time.DayOfWeek.values()) {
-            long sec = byDay.getOrDefault(day, 0L);
-            String dayName = day.name().charAt(0) + day.name().substring(1).toLowerCase();
-            dayOfWeekAnalysisModel.addRow(new Object[]{
-                dayName,
-                formatDuration(sec)
-            });
-        }
+        weeklyBarChartPanel.setData(byDay);
+
+        // Update daily timeline with today's sessions
+        dailyTimelinePanel.setData(rawSessions);
 
         // Heatmap update (always last 365 days)
         LocalDate heatmapStart = today.minusDays(365);
@@ -1208,6 +1335,7 @@ public class AppFrame extends JFrame {
                 stopwatchElapsedMillis = 0;
             }
             stopwatchStarted = true;
+            stopwatchBreakNotificationSent = false;
         }
 
         if (!stopwatchRunning) {
@@ -1317,6 +1445,7 @@ public class AppFrame extends JFrame {
 
         refreshSessionsTable();
         refreshExportAvailability();
+        notifySessionLogged(durationSeconds);
         resetStopwatch();
         JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Stopwatch session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
         if (miniWindow != null) {
@@ -1332,6 +1461,7 @@ public class AppFrame extends JFrame {
         stopwatchSubject = null;
         stopwatchSessionStart = null;
         resumedSession = null;
+        stopwatchBreakNotificationSent = false;
         stopwatchUiTimer.stop();
         stopwatchSubjectLabel.setText("Subject: -");
         stopwatchTimeLabel.setText("00:00:00");
@@ -1351,6 +1481,17 @@ public class AppFrame extends JFrame {
         }
 
         long totalSeconds = elapsed / 1000;
+        
+        // 50-min break reminder (3000 seconds)
+        if (totalSeconds >= 3000 && !stopwatchBreakNotificationSent) {
+            if (storageService.loadBreakRemindersEnabled()) {
+                sendNotification("Take a Break!", "You've been tracking for 50 minutes. Time to stretch and rest your eyes!", TrayIcon.MessageType.INFO);
+            }
+            stopwatchBreakNotificationSent = true;
+        }
+
+        checkGoalAchievement(totalSeconds);
+
         String formatted = formatDuration(totalSeconds);
         stopwatchTimeLabel.setText(formatted);
         if (miniWindow != null) {
@@ -1400,6 +1541,7 @@ public class AppFrame extends JFrame {
                 timerSessionStart = LocalDateTime.now();
             }
             timerStarted = true;
+            timerBreakNotificationSent = false;
         }
 
         if (!timerRunning) {
@@ -1436,6 +1578,7 @@ public class AppFrame extends JFrame {
         long elapsed = timerTotalSeconds - timerRemainingSeconds;
         if (elapsed > 0) {
             logTimerSession(elapsed);
+            notifySessionLogged(elapsed);
             JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Timer session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
         }
 
@@ -1453,6 +1596,7 @@ public class AppFrame extends JFrame {
         timerRemainingSeconds = 0;
         timerSessionStart = null;
         resumedSession = null;
+        timerBreakNotificationSent = false;
         timerTimeLabel.setText("00:00:00");
         updateTimerButtons();
     }
@@ -1463,6 +1607,17 @@ public class AppFrame extends JFrame {
         }
 
         timerRemainingSeconds--;
+        
+        long elapsedSec = timerTotalSeconds - timerRemainingSeconds;
+        if (elapsedSec >= 3000 && !timerBreakNotificationSent) {
+            if (storageService.loadBreakRemindersEnabled()) {
+                sendNotification("Take a Break!", "You've been tracking for 50 minutes. Time to stretch and rest your eyes!", TrayIcon.MessageType.INFO);
+            }
+            timerBreakNotificationSent = true;
+        }
+
+        checkGoalAchievement(elapsedSec);
+
         String formatted = formatDuration(Math.max(0, timerRemainingSeconds));
         timerTimeLabel.setText(formatted);
         if (miniWindow != null) {
@@ -1474,6 +1629,7 @@ public class AppFrame extends JFrame {
             timerRunning = false;
             long elapsed = timerTotalSeconds;
             logTimerSession(elapsed);
+            notifySessionLogged(elapsed);
             JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Timer finished and session logged.", "Completed", JOptionPane.INFORMATION_MESSAGE);
             resetTimer();
             if (miniWindow != null) {
@@ -1702,6 +1858,8 @@ public class AppFrame extends JFrame {
             });
         }
         refreshAnalysis();
+        refreshInsights();
+        checkGoalAchievement(0);
         refreshStopwatchSubjects();
         refreshTimerSubjects();
     }
@@ -2542,4 +2700,629 @@ public class AppFrame extends JFrame {
             ThemeManager.applyTheme(this, ThemeManager.getColors(ThemeManager.loadTheme()));
         }
     }
+
+    // --- System Tray and Notifications ---
+
+    private void initSystemTray() {
+        if (!SystemTray.isSupported()) return;
+        SystemTray tray = SystemTray.getSystemTray();
+        Image image = getIconImage();
+        if (image == null) {
+            try {
+                java.io.InputStream imgStream = AppFrame.class.getResourceAsStream("/com/timelogger/icon.png");
+                if (imgStream != null) {
+                    image = javax.imageio.ImageIO.read(imgStream);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (image != null) {
+            trayIcon = new TrayIcon(image, "Time Logger");
+            trayIcon.setImageAutoSize(true);
+            
+            // Double-click to restore
+            trayIcon.addActionListener(e -> {
+                setVisible(true);
+                setExtendedState(JFrame.NORMAL);
+                toFront();
+            });
+
+            // Build Context Menu
+            java.awt.PopupMenu popup = new java.awt.PopupMenu();
+            
+            java.awt.MenuItem restoreItem = new java.awt.MenuItem("Show Time Logger");
+            restoreItem.addActionListener(e -> {
+                setVisible(true);
+                setExtendedState(JFrame.NORMAL);
+                toFront();
+            });
+            popup.add(restoreItem);
+            
+            java.awt.MenuItem pauseItem = new java.awt.MenuItem("Pause / Resume Stopwatch");
+            pauseItem.addActionListener(e -> {
+                if (stopwatchStarted) {
+                    togglePauseStopwatch();
+                }
+            });
+            popup.add(pauseItem);
+
+            java.awt.MenuItem stopItem = new java.awt.MenuItem("Stop & Log Stopwatch");
+            stopItem.addActionListener(e -> {
+                if (stopwatchStarted) {
+                    stopAndLogStopwatch();
+                }
+            });
+            popup.add(stopItem);
+            
+            popup.addSeparator();
+            
+            java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
+            exitItem.addActionListener(e -> {
+                System.exit(0);
+            });
+            popup.add(exitItem);
+            
+            trayIcon.setPopupMenu(popup);
+            
+            try {
+                tray.add(trayIcon);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void sendNotification(String title, String message, TrayIcon.MessageType type) {
+        if (trayIcon != null && storageService.loadNotificationEnabled()) {
+            trayIcon.displayMessage(title, message, type);
+        }
+    }
+
+    private void notifySessionLogged(long durationSeconds) {
+        if (durationSeconds <= 0 || !storageService.loadNotificationEnabled()) return;
+
+        long mins = durationSeconds / 60;
+        String durationStr = mins + " minutes";
+        if (mins >= 60) {
+            durationStr = (mins / 60) + " hr " + (mins % 60) + " mins";
+        }
+
+        String advice = "Take a 5-minute break to refresh your mind!";
+        if (durationSeconds >= 3600) {
+            advice = "Take a 15-minute break. Walk around and hydrate!";
+        } else if (durationSeconds >= 1800) {
+            advice = "Take a 10-minute break. Rest your eyes!";
+        }
+
+        sendNotification("Session Logged!", "Tracked " + durationStr + ". " + advice, TrayIcon.MessageType.INFO);
+    }
+
+    // --- Insights UI Panel ---
+
+    private javax.swing.JComponent createInsightsPanel() {
+        JPanel mainPanel = new JPanel(new BorderLayout(12, 12));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+
+        // Top Row: Summary Cards (Burnout Risk & Productivity Index)
+        JPanel topRow = new JPanel(new GridLayout(1, 2, 12, 12));
+        
+        JPanel riskCard = new JPanel(new BorderLayout(8, 8));
+        riskCard.setName("summaryPanel");
+        riskCard.setBorder(BorderFactory.createTitledBorder("Burnout Risk Meter"));
+        burnoutRiskLabel.setFont(new Font("SansSerif", Font.BOLD, 48));
+        burnoutStatusLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        riskCard.add(burnoutRiskLabel, BorderLayout.CENTER);
+        riskCard.add(burnoutStatusLabel, BorderLayout.SOUTH);
+        topRow.add(riskCard);
+
+        JPanel prodCard = new JPanel(new BorderLayout(8, 8));
+        prodCard.setName("summaryPanel");
+        prodCard.setBorder(BorderFactory.createTitledBorder("Productivity Index"));
+        productivityIndexLabel.setFont(new Font("SansSerif", Font.BOLD, 48));
+        productivityProgress.setStringPainted(true);
+        prodCard.add(productivityIndexLabel, BorderLayout.CENTER);
+        prodCard.add(productivityProgress, BorderLayout.SOUTH);
+        topRow.add(prodCard);
+
+        mainPanel.add(topRow, BorderLayout.NORTH);
+
+        // Middle Panel: Bento Split (Warnings & Details)
+        JPanel middleRow = new JPanel(new GridLayout(1, 2, 12, 12));
+
+        JPanel warningCard = new JPanel(new BorderLayout(8, 8));
+        warningCard.setName("summaryPanel");
+        warningCard.setBorder(BorderFactory.createTitledBorder("Warning Signs & Advice"));
+        warningsContainer.setLayout(new javax.swing.BoxLayout(warningsContainer, javax.swing.BoxLayout.Y_AXIS));
+        warningsContainer.setOpaque(false);
+        warningCard.add(new JScrollPane(warningsContainer), BorderLayout.CENTER);
+        middleRow.add(warningCard);
+
+        JPanel detailsCard = new JPanel(new GridBagLayout());
+        detailsCard.setName("summaryPanel");
+        detailsCard.setBorder(BorderFactory.createTitledBorder("7-Day Analytics Details"));
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+
+        addDetailRow(detailsCard, "Total Hours Tracked:", insightDetailHours, gbc, 0);
+        addDetailRow(detailsCard, "Consecutive Active Days:", insightDetailDays, gbc, 1);
+        addDetailRow(detailsCard, "Late-Night Sessions:", insightDetailLateNights, gbc, 2);
+        addDetailRow(detailsCard, "Average Break Ratio:", insightDetailBreakRatio, gbc, 3);
+        addDetailRow(detailsCard, "Total Mid-Session Breaks:", insightDetailMidSessionBreaks, gbc, 4);
+        addDetailRow(detailsCard, "Study Session Efficiency:", insightDetailEfficiency, gbc, 5);
+        
+        middleRow.add(detailsCard);
+
+        mainPanel.add(middleRow, BorderLayout.CENTER);
+
+        // Bottom Panel: Preferences
+        JPanel prefsCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 8));
+        prefsCard.setName("summaryPanel");
+        prefsCard.setBorder(BorderFactory.createTitledBorder("Windows Notification Settings"));
+        
+        enableNotificationsCheckbox = new javax.swing.JCheckBox("Enable Windows Notifications");
+        enableNotificationsCheckbox.setSelected(storageService.loadNotificationEnabled());
+        enableNotificationsCheckbox.setOpaque(false);
+        enableNotificationsCheckbox.addActionListener(e -> storageService.saveNotificationEnabled(enableNotificationsCheckbox.isSelected()));
+
+        enableBreakRemindersCheckbox = new javax.swing.JCheckBox("Enable 50-Min Break Reminders");
+        enableBreakRemindersCheckbox.setSelected(storageService.loadBreakRemindersEnabled());
+        enableBreakRemindersCheckbox.setOpaque(false);
+        enableBreakRemindersCheckbox.addActionListener(e -> storageService.saveBreakRemindersEnabled(enableBreakRemindersCheckbox.isSelected()));
+
+        prefsCard.add(enableNotificationsCheckbox);
+        prefsCard.add(enableBreakRemindersCheckbox);
+
+        mainPanel.add(prefsCard, BorderLayout.SOUTH);
+
+        // Wrap in a viewport scrollpane
+        JScrollPane scrollPane = new JScrollPane(mainPanel);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        return scrollPane;
+    }
+
+    private void addDetailRow(JPanel panel, String labelText, JLabel valueLabel, GridBagConstraints gbc, int row) {
+        gbc.gridy = row;
+        gbc.gridx = 0;
+        gbc.weightx = 0.6;
+        JLabel lbl = new JLabel(labelText);
+        lbl.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        panel.add(lbl, gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.4;
+        valueLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        panel.add(valueLabel, gbc);
+    }
+
+    private void refreshInsights() {
+        List<SessionRecord> allSessions = storageService.loadSessions();
+        LocalDate today = LocalDate.now();
+        LocalDate sevenDaysAgo = today.minusDays(6);
+
+        // Filter sessions in the last 7 days
+        List<SessionRecord> recentSessions = allSessions.stream()
+            .filter(s -> !s.getStartTime().toLocalDate().isBefore(sevenDaysAgo) && !s.getStartTime().toLocalDate().isAfter(today))
+            .collect(Collectors.toList());
+
+        // 1. Total Hours Tracked
+        double totalHours = recentSessions.stream()
+            .mapToLong(SessionRecord::getDurationSeconds)
+            .sum() / 3600.0;
+
+        // 2. Active Days Count
+        java.util.Set<LocalDate> activeDates = recentSessions.stream()
+            .map(s -> s.getStartTime().toLocalDate())
+            .collect(Collectors.toSet());
+        int activeDaysCount = activeDates.size();
+
+        // 3. Consecutive Active Days
+        int consecutiveActiveDays = 0;
+        LocalDate checkDate = today;
+        // If today has no sessions, check starting from yesterday
+        if (!activeDates.contains(today)) {
+            checkDate = today.minusDays(1);
+        }
+        while (activeDates.contains(checkDate)) {
+            consecutiveActiveDays++;
+            checkDate = checkDate.minusDays(1);
+        }
+
+        // 4. Late-Night Sessions
+        int lateNightSessions = 0;
+        for (SessionRecord s : recentSessions) {
+            int startHour = s.getStartTime().getHour();
+            int endHour = s.getEndTime().getHour();
+            if (startHour >= 23 || startHour < 5 || endHour >= 23 || endHour < 5) {
+                lateNightSessions++;
+            }
+        }
+
+        // 5. Average Break Ratio
+        // We group sessions by date. For each active date, we sort by start time.
+        // Active time = sum of session durations.
+        // Break time = sum of idle gaps between sessions.
+        double totalBreakRatioSum = 0;
+        int activeDaysWithSessions = 0;
+        
+        java.util.Map<LocalDate, List<SessionRecord>> sessionsByDate = recentSessions.stream()
+            .collect(Collectors.groupingBy(s -> s.getStartTime().toLocalDate()));
+
+        for (java.util.Map.Entry<LocalDate, List<SessionRecord>> entry : sessionsByDate.entrySet()) {
+            List<SessionRecord> dailySessions = new ArrayList<>(entry.getValue());
+            dailySessions.sort(java.util.Comparator.comparing(SessionRecord::getStartTime));
+            
+            long activeSeconds = dailySessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
+            long breakSeconds = 0;
+            for (int i = 0; i < dailySessions.size() - 1; i++) {
+                LocalDateTime endPrev = dailySessions.get(i).getEndTime();
+                LocalDateTime startNext = dailySessions.get(i+1).getStartTime();
+                long gap = java.time.Duration.between(endPrev, startNext).toSeconds();
+                if (gap > 0) {
+                    breakSeconds += gap;
+                }
+            }
+            if (activeSeconds > 0) {
+                totalBreakRatioSum += (double) breakSeconds / activeSeconds;
+                activeDaysWithSessions++;
+            }
+        }
+
+        double avgBreakRatio = activeDaysWithSessions > 0 ? (totalBreakRatioSum / activeDaysWithSessions) : 1.0;
+
+        // Calculate Burnout Risk Score
+        double burnoutScore = 0;
+        burnoutScore += totalHours * 1.5; // 66 hours = 100%
+        if (activeDaysCount > 0 && avgBreakRatio < 0.15) {
+            burnoutScore += 20.0;
+        }
+        int riskPercent = (int) Math.max(0, Math.min(100, burnoutScore));
+
+        // Update Burnout UI
+        burnoutRiskLabel.setText(riskPercent + "%");
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+        if (riskPercent >= 70) {
+            burnoutRiskLabel.setForeground(java.awt.Color.RED);
+            burnoutStatusLabel.setText("High Burnout Risk! Rest is required.");
+            burnoutStatusLabel.setForeground(java.awt.Color.RED);
+        } else if (riskPercent >= 30) {
+            burnoutRiskLabel.setForeground(java.awt.Color.ORANGE);
+            burnoutStatusLabel.setText("Moderate Burnout Risk. Schedule breaks.");
+            burnoutStatusLabel.setForeground(java.awt.Color.ORANGE);
+        } else {
+            burnoutRiskLabel.setForeground(colors.accent);
+            burnoutStatusLabel.setText("Low Burnout Risk. Doing great!");
+            burnoutStatusLabel.setForeground(colors.text);
+        }
+
+        // Calculate Productivity Index
+        double dailyGoalHrs = storageService.loadDailyGoalMinutes() / 60.0;
+        double targetHours = dailyGoalHrs * 7.0;
+        double goalAchievementRate = targetHours > 0 ? Math.min(1.0, totalHours / targetHours) : 1.0;
+        double pacingFactor = 1.0 - (riskPercent / 200.0);
+        int prodIndex = (int) (goalAchievementRate * pacingFactor * 100.0);
+
+        // Update Productivity UI
+        productivityIndexLabel.setText(prodIndex + "/100");
+        productivityProgress.setValue(prodIndex);
+
+        // Calculate mid-session breaks & efficiency for the last 7 days
+        long totalSpanSeconds = 0;
+        long totalActiveSeconds = 0;
+        for (SessionRecord s : recentSessions) {
+            long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+            totalSpanSeconds += span;
+            totalActiveSeconds += s.getDurationSeconds();
+        }
+        long totalMidSessionBreaks = Math.max(0, totalSpanSeconds - totalActiveSeconds);
+        double efficiencyVal = totalSpanSeconds > 0 ? ((double) totalActiveSeconds / totalSpanSeconds) * 100.0 : 100.0;
+
+        // Update Metrics Labels
+        insightDetailHours.setText(String.format("%.1f hrs", totalHours));
+        insightDetailDays.setText(consecutiveActiveDays + " days");
+        insightDetailLateNights.setText(lateNightSessions + " sessions");
+        insightDetailBreakRatio.setText(String.format("%.1f%%", avgBreakRatio * 100));
+        insightDetailMidSessionBreaks.setText(formatDuration(totalMidSessionBreaks));
+        insightDetailEfficiency.setText(String.format("%.1f%%", efficiencyVal));
+
+        // Update Warnings & Recommendations
+        warningsContainer.removeAll();
+        boolean hasWarnings = false;
+
+        if (totalHours > 56.0) {
+            addWarningLabel("⚠️ Extreme Load: Tracked over 56 hours. High fatigue risk.");
+            hasWarnings = true;
+        }
+        if (activeDaysCount > 0 && avgBreakRatio < 0.15) {
+            addWarningLabel("⚠️ Insufficient Breaks: Break ratio is under 15%. Rest more.");
+            hasWarnings = true;
+        }
+        if (!hasWarnings) {
+            JLabel okayLabel = new JLabel("✓ Your tracking habits look balanced and healthy!");
+            okayLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            okayLabel.setForeground(colors.accent);
+            warningsContainer.add(okayLabel);
+        }
+
+        warningsContainer.revalidate();
+        warningsContainer.repaint();
+    }
+
+    private void addWarningLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(new Font("SansSerif", Font.BOLD, 12));
+        lbl.setForeground(java.awt.Color.RED);
+        lbl.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        warningsContainer.add(lbl);
+    }
+
+    private void checkGoalAchievement(long activeSeconds) {
+        LocalDate today = LocalDate.now();
+        if (!today.equals(lastGoalCheckDate)) {
+            goalNotificationSentToday = false;
+            lastGoalCheckDate = today;
+        }
+
+        if (goalNotificationSentToday) return;
+
+        GoalStreakStats stats = calculateGoalStreakStats();
+        if (stats.dailyGoalMinutes <= 0) return;
+
+        int totalMinutesToday = stats.todayMinutes + (int)(activeSeconds / 60);
+        if (totalMinutesToday >= stats.dailyGoalMinutes) {
+            sendNotification("Goal Achieved! 🎉", 
+                "You have met your daily goal of " + stats.dailyGoalMinutes + " minutes today!", 
+                TrayIcon.MessageType.INFO);
+            goalNotificationSentToday = true;
+        }
+    }
+
+    private static class WeeklyBarChartPanel extends JPanel {
+        private java.util.Map<java.time.DayOfWeek, Long> data = new java.util.HashMap<>();
+
+        public WeeklyBarChartPanel() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(200, 140));
+        }
+
+        public void setData(java.util.Map<java.time.DayOfWeek, Long> data) {
+            this.data = data != null ? data : new java.util.HashMap<>();
+            repaint();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+            int w = getWidth();
+            int h = getHeight();
+
+            int paddingLeft = 16;
+            int paddingRight = 16;
+            int paddingTop = 20;
+            int paddingBottom = 24;
+
+            int chartW = w - paddingLeft - paddingRight;
+            int chartH = h - paddingTop - paddingBottom;
+
+            long maxVal = 0;
+            for (long val : data.values()) {
+                if (val > maxVal) maxVal = val;
+            }
+            if (maxVal == 0) maxVal = 3600;
+
+            DayOfWeek[] days = DayOfWeek.values();
+            int barGap = 6;
+            int numBars = days.length;
+            int barW = (chartW - (barGap * (numBars - 1))) / numBars;
+
+            g2.setColor(colors.border);
+            g2.drawLine(paddingLeft, h - paddingBottom, w - paddingRight, h - paddingBottom);
+
+            String[] dayLabels = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+
+            for (int i = 0; i < numBars; i++) {
+                DayOfWeek day = days[i];
+                long seconds = data.getOrDefault(day, 0L);
+                double ratio = (double) seconds / maxVal;
+                int barH = (int) (ratio * chartH);
+
+                int x = paddingLeft + i * (barW + barGap);
+                int y = h - paddingBottom - barH;
+
+                if (seconds > 0) {
+                    GradientPaint gp = new GradientPaint(x, y, colors.accent, x, y + barH, new Color(colors.accent.getRed(), colors.accent.getGreen(), colors.accent.getBlue(), 50));
+                    g2.setPaint(gp);
+                    g2.fillRoundRect(x, y, barW, barH, 4, 4);
+                }
+
+                g2.setColor(colors.text);
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                FontMetrics fm = g2.getFontMetrics();
+                String lbl = dayLabels[i];
+                int lblX = x + (barW - fm.stringWidth(lbl)) / 2;
+                int lblY = h - paddingBottom + 14;
+                g2.drawString(lbl, lblX, lblY);
+
+                if (seconds > 0) {
+                    double hrs = seconds / 3600.0;
+                    String hrsStr = String.format("%.1fh", hrs);
+                    g2.setFont(new Font("SansSerif", Font.BOLD, 9));
+                    FontMetrics fmHrs = g2.getFontMetrics();
+                    int hrsX = x + (barW - fmHrs.stringWidth(hrsStr)) / 2;
+                    int hrsY = y - 4;
+                    g2.drawString(hrsStr, hrsX, hrsY);
+                }
+            }
+            g2.dispose();
+        }
+    }
+
+    private static class DailyTimelinePanel extends JPanel {
+        private List<SessionRecord> todaySessions = new ArrayList<>();
+
+        public DailyTimelinePanel() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(600, 70));
+            setToolTipText("");
+        }
+
+        public void setData(List<SessionRecord> allSessions) {
+            LocalDate today = LocalDate.now();
+            this.todaySessions = allSessions.stream()
+                .filter(s -> s.getStartTime().toLocalDate().equals(today))
+                .sorted(java.util.Comparator.comparing(SessionRecord::getStartTime))
+                .collect(Collectors.toList());
+            repaint();
+        }
+
+        @Override
+        public String getToolTipText(MouseEvent e) {
+            if (todaySessions.isEmpty()) return "No sessions tracked today.";
+
+            int w = getWidth();
+            int paddingLeft = 20;
+            int paddingRight = 20;
+            int chartW = w - paddingLeft - paddingRight;
+
+            LocalDateTime firstStart = todaySessions.get(0).getStartTime();
+            LocalDateTime lastEnd = todaySessions.get(todaySessions.size() - 1).getEndTime();
+            
+            LocalDateTime timelineStart = firstStart.minusMinutes(30);
+            LocalDateTime timelineEnd = lastEnd.plusMinutes(30);
+
+            long totalTimelineSec = java.time.Duration.between(timelineStart, timelineEnd).toSeconds();
+            if (totalTimelineSec <= 0) return null;
+
+            int mouseX = e.getX();
+            if (mouseX < paddingLeft || mouseX > w - paddingRight) return null;
+
+            double ratio = (double) (mouseX - paddingLeft) / chartW;
+            long offsetSeconds = (long) (ratio * totalTimelineSec);
+            LocalDateTime hoverTime = timelineStart.plusSeconds(offsetSeconds);
+
+            for (SessionRecord s : todaySessions) {
+                if (!hoverTime.isBefore(s.getStartTime()) && !hoverTime.isAfter(s.getEndTime())) {
+                    long activeSec = s.getDurationSeconds();
+                    long spanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+                    long breakSec = Math.max(0, spanSec - activeSec);
+                    double efficiency = spanSec > 0 ? ((double) activeSec / spanSec) * 100.0 : 100.0;
+
+                    String activeStr = String.format("%d min", activeSec / 60);
+                    if (activeSec >= 3600) {
+                        activeStr = (activeSec / 3600) + "h " + ((activeSec % 3600) / 60) + "m";
+                    }
+
+                    String breakStr = "";
+                    if (breakSec > 0) {
+                        breakStr = String.format("<br>Mid-Session Breaks: %d min (Efficiency: %.1f%%)", breakSec / 60, efficiency);
+                    }
+
+                    return "<html><b>Subject:</b> " + s.getSubject() +
+                           "<br><b>Activity:</b> " + s.getDescription() +
+                           "<br><b>Time:</b> " + s.getStartTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + 
+                           " - " + s.getEndTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) +
+                           "<br><b>Active Duration:</b> " + activeStr +
+                           breakStr + "</html>";
+                }
+            }
+
+            return "Idle/Break between sessions";
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+            int w = getWidth();
+            int h = getHeight();
+
+            int paddingLeft = 20;
+            int paddingRight = 20;
+            int paddingTop = 10;
+            int paddingBottom = 30;
+
+            int chartW = w - paddingLeft - paddingRight;
+            int barY = paddingTop;
+            int barH = h - paddingTop - paddingBottom;
+
+            g2.setColor(colors.border);
+            g2.fillRoundRect(paddingLeft, barY, chartW, barH, 6, 6);
+
+            if (todaySessions.isEmpty()) {
+                g2.setColor(colors.text);
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
+                FontMetrics fm = g2.getFontMetrics();
+                String msg = "No study sessions logged today yet.";
+                g2.drawString(msg, (w - fm.stringWidth(msg)) / 2, barY + barH / 2 + 5);
+                g2.dispose();
+                return;
+            }
+
+            LocalDateTime firstStart = todaySessions.get(0).getStartTime();
+            LocalDateTime lastEnd = todaySessions.get(todaySessions.size() - 1).getEndTime();
+            
+            LocalDateTime timelineStart = firstStart.minusMinutes(30);
+            LocalDateTime timelineEnd = lastEnd.plusMinutes(30);
+
+            long totalTimelineSec = java.time.Duration.between(timelineStart, timelineEnd).toSeconds();
+            if (totalTimelineSec <= 0) totalTimelineSec = 1;
+
+            for (SessionRecord s : todaySessions) {
+                long offsetStartSec = java.time.Duration.between(timelineStart, s.getStartTime()).toSeconds();
+                long sessionSpanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+
+                int x = paddingLeft + (int) (((double) offsetStartSec / totalTimelineSec) * chartW);
+                int sessionW = (int) (((double) sessionSpanSec / totalTimelineSec) * chartW);
+                if (sessionW < 4) sessionW = 4;
+
+                g2.setColor(colors.accent);
+                g2.fillRoundRect(x, barY, sessionW, barH, 4, 4);
+
+                long activeSec = s.getDurationSeconds();
+                long midSessionBreakSec = Math.max(0, sessionSpanSec - activeSec);
+                if (midSessionBreakSec > 0 && sessionW > 10) {
+                    double ratio = (double) midSessionBreakSec / sessionSpanSec;
+                    int breakW = (int) (sessionW * ratio);
+                    int breakX = x + sessionW - breakW;
+                    g2.setColor(new Color(128, 128, 128, 180));
+                    g2.fillRoundRect(breakX, barY + 2, breakW, barH - 4, 3, 3);
+                }
+            }
+
+            g2.setColor(colors.text);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            FontMetrics fm = g2.getFontMetrics();
+
+            long hoursSpan = totalTimelineSec / 3600;
+            int tickIntervalHours = hoursSpan > 12 ? 3 : (hoursSpan > 6 ? 2 : 1);
+
+            LocalDateTime tickTime = timelineStart.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusHours(1);
+            while (tickTime.isBefore(timelineEnd)) {
+                long offsetSec = java.time.Duration.between(timelineStart, tickTime).toSeconds();
+                int tickX = paddingLeft + (int) (((double) offsetSec / totalTimelineSec) * chartW);
+
+                if (tickX >= paddingLeft && tickX <= w - paddingRight) {
+                    g2.setColor(colors.border);
+                    g2.drawLine(tickX, barY + barH, tickX, barY + barH + 4);
+
+                    g2.setColor(colors.text);
+                    String timeLabel = tickTime.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                    int lblX = tickX - fm.stringWidth(timeLabel) / 2;
+                    int lblY = barY + barH + 16;
+                    g2.drawString(timeLabel, lblX, lblY);
+                }
+                tickTime = tickTime.plusHours(tickIntervalHours);
+            }
+            g2.dispose();
+        }
+    }
 }
+
