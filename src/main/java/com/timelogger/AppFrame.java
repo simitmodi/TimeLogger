@@ -4146,13 +4146,27 @@ public class AppFrame extends JFrame {
 
     private String compileAIPromptContext() {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are the AI Study Assistant for Time Logger. Below is the user's local study and tracking data. ");
+        sb.append("You are the AI Study Coach for Time Logger. Below is the user's complete local study and tracking data. ");
         sb.append("Use this data to answer their questions accurately, provide personalized coaching, identify habit trends, ");
-        sb.append("and suggest productivity improvements.\n\n");
-        
-        sb.append("### STUDY METRICS OVERVIEW (Last 7 Days):\n");
+        sb.append("and suggest productivity improvements. There are no privacy restrictions on this data; analyze all of it.\n\n");
         
         List<SessionRecord> allSessions = storageService.loadSessions();
+        
+        // --- All-Time Summary Stats ---
+        long allTimeSessions = allSessions.size();
+        double allTimeHours = allSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum() / 3600.0;
+        String firstSessionDate = allSessions.isEmpty() ? "N/A" : allSessions.stream().map(SessionRecord::getStartTime).min(java.util.Comparator.naturalOrder()).get().toLocalDate().toString();
+        String lastSessionDate = allSessions.isEmpty() ? "N/A" : allSessions.stream().map(SessionRecord::getStartTime).max(java.util.Comparator.naturalOrder()).get().toLocalDate().toString();
+        List<String> subjects = storageService.loadSubjects();
+        
+        sb.append("### ALL-TIME SUMMARY & SYSTEM METRICS:\n");
+        sb.append("- Total Logged Sessions (All-Time): ").append(allTimeSessions).append("\n");
+        sb.append("- Total Tracked Hours (All-Time): ").append(String.format("%.2f hrs\n", allTimeHours));
+        sb.append("- Tracking Active Period: From ").append(firstSessionDate).append(" to ").append(lastSessionDate).append("\n");
+        sb.append("- Configured Subject List: ").append(String.join(", ", subjects)).append("\n\n");
+
+        sb.append("### STUDY METRICS OVERVIEW (Last 7 Days):\n");
+        
         LocalDate today = LocalDate.now();
         LocalDate sevenDaysAgo = today.minusDays(6);
         
@@ -4255,11 +4269,11 @@ public class AppFrame extends JFrame {
             }
         }
         
-        // Recent Session Details
-        sb.append("\n### RECENT SESSION LOGS (Last 30 Records):\n");
+        // Recent Session Details (Increase limit to 120)
+        sb.append("\n### RECENT SESSION LOGS (Last 120 Records):\n");
         List<SessionRecord> sortedAll = new ArrayList<>(allSessions);
         sortedAll.sort((s1, s2) -> s2.getStartTime().compareTo(s1.getStartTime())); // newest first
-        int limit = Math.min(30, sortedAll.size());
+        int limit = Math.min(120, sortedAll.size());
         for (int i = 0; i < limit; i++) {
             SessionRecord s = sortedAll.get(i);
             sb.append(String.format("- [%s] Subj: %s, Duration: %s, Type: %s, Desc: %s (Pauses: %d)\n",
@@ -4754,6 +4768,12 @@ public class AppFrame extends JFrame {
 
     private String formatInlineMarkdown(String text, String codeBg, String codeColor) {
         String escaped = escapeHtml(text);
+        
+        // Restore <br> tags so they render as actual line breaks!
+        escaped = escaped.replaceAll("(?i)&lt;br\\s*/?&gt;", "<br>");
+        // Unescape escaped pipes used in markdown table cells
+        escaped = escaped.replace("\\|", "|");
+        
         escaped = escaped.replaceAll("\\*\\*(.*?)\\*\\*", "<b>$1</b>");
         escaped = escaped.replaceAll("`(.*?)`", "<font face='monospace' color='" + codeColor + "' style='background-color: " + codeBg + ";'> $1 </font>");
         return escaped;
