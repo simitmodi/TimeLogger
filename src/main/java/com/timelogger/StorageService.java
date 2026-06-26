@@ -235,21 +235,39 @@ public class StorageService {
     }
 
     public String loadOpenRouterApiKey() {
-        Path file = appDirectory.resolve("openrouter_api_key.txt");
+        Path newFile = Paths.get(System.getProperty("user.home"), ".timelogger_openrouter_key");
+        Path oldFile = appDirectory.resolve("openrouter_api_key.txt");
+        
+        // Migrate old file if it exists and new file doesn't
+        if (Files.exists(oldFile)) {
+            try {
+                String key = Files.readString(oldFile, StandardCharsets.UTF_8).trim();
+                if (!key.isEmpty()) {
+                    Files.writeString(newFile, key, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                }
+                Files.deleteIfExists(oldFile);
+            } catch (Exception ignored) {}
+        }
+        
         try {
-            if (!Files.exists(file)) {
+            if (!Files.exists(newFile)) {
                 return "";
             }
-            return Files.readString(file, StandardCharsets.UTF_8).trim();
+            return Files.readString(newFile, StandardCharsets.UTF_8).trim();
         } catch (Exception e) {
             return "";
         }
     }
 
     public void saveOpenRouterApiKey(String apiKey) {
-        Path file = appDirectory.resolve("openrouter_api_key.txt");
+        Path newFile = Paths.get(System.getProperty("user.home"), ".timelogger_openrouter_key");
+        Path oldFile = appDirectory.resolve("openrouter_api_key.txt");
         try {
-            Files.writeString(file, apiKey.trim(), StandardCharsets.UTF_8,
+            // Delete old file if present
+            Files.deleteIfExists(oldFile);
+            
+            Files.writeString(newFile, apiKey.trim(), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             throw new RuntimeException("Unable to save OpenRouter API key", e);

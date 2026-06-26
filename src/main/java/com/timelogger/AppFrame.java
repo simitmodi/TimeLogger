@@ -3892,38 +3892,54 @@ public class AppFrame extends JFrame {
         }
     }
 
-    // --- AI Assistant UI & Logic ---
-
     private javax.swing.JComponent createAiAssistantPanel() {
         // Main key setup card
         JPanel setupCard = new JPanel(new GridBagLayout());
         setupCard.setName("summaryPanel"); // inherits cardBg from theme
-        setupCard.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
+        setupCard.setBorder(BorderFactory.createEmptyBorder(32, 32, 32, 32));
         
         JPanel setupInner = new JPanel(new GridBagLayout());
         setupInner.setName("summaryPanel");
-        setupInner.setBorder(BorderFactory.createTitledBorder("OpenRouter API Key Setup"));
         
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.insets = new Insets(12, 12, 12, 12);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.gridx = 0;
         gbc.gridy = 0;
         
-        JLabel descLabel = new JLabel("To enable the AI Study Assistant, please provide your OpenRouter API Key.");
+        JLabel titleLabelSetup = new JLabel("🔑 AI Assistant Configuration", SwingConstants.CENTER);
+        titleLabelSetup.setFont(new Font("SansSerif", Font.BOLD, 18));
+        setupInner.add(titleLabelSetup, gbc);
+        
+        gbc.gridy = 1;
+        JLabel descLabel = new JLabel("<html><div style='text-align: center; width: 360px;'>"
+            + "Connect your OpenRouter account to enable personalized study coaching, workload analysis, "
+            + "and focus insights based on your logged sessions data.</div></html>", SwingConstants.CENTER);
         descLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
         setupInner.add(descLabel, gbc);
         
-        gbc.gridy = 1;
+        gbc.gridy = 2;
+        JLabel privacyLabel = new JLabel("<html><div style='text-align: center; width: 360px; color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px;'>"
+            + "🔒 <b>Local-First Privacy</b>: Your API key is stored securely in your user home folder "
+            + "(<code>~/.timelogger_openrouter_key</code>) and is never sent to any server except the "
+            + "official OpenRouter endpoint.</div></html>", SwingConstants.CENTER);
+        privacyLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        setupInner.add(privacyLabel, gbc);
+        
+        gbc.gridy = 3;
         JPanel keyInputPanel = new JPanel(new BorderLayout(8, 0));
         keyInputPanel.setOpaque(false);
-        keyInputPanel.add(new JLabel("API Key: "), BorderLayout.WEST);
+        JLabel keyLabel = new JLabel("API Key: ");
+        keyLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        keyInputPanel.add(keyLabel, BorderLayout.WEST);
         openRouterKeyField.setEchoChar('•');
+        openRouterKeyField.setPreferredSize(new Dimension(280, 28));
         keyInputPanel.add(openRouterKeyField, BorderLayout.CENTER);
         setupInner.add(keyInputPanel, gbc);
         
-        gbc.gridy = 2;
+        gbc.gridy = 4;
         ModernButton saveKeyBtn = new ModernButton("Save API Key");
+        saveKeyBtn.setPreferredSize(new Dimension(150, 32));
         saveKeyBtn.addActionListener(e -> {
             String key = new String(openRouterKeyField.getPassword()).trim();
             if (key.isEmpty()) {
@@ -3939,8 +3955,8 @@ public class AppFrame extends JFrame {
         });
         setupInner.add(saveKeyBtn, gbc);
         
-        gbc.gridy = 3;
-        JLabel linkLabel = new JLabel("<html>Don't have an API key? <a href='https://openrouter.ai/keys'>Get one from OpenRouter</a></html>");
+        gbc.gridy = 5;
+        JLabel linkLabel = new JLabel("<html><div style='text-align: center;'>Don't have an API key? <a href='https://openrouter.ai/keys'>Get one from OpenRouter</a> (free models available)</div></html>", SwingConstants.CENTER);
         linkLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         linkLabel.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -3965,16 +3981,27 @@ public class AppFrame extends JFrame {
         // Top Toolbar
         JPanel topToolbar = new JPanel(new BorderLayout(8, 8));
         topToolbar.setOpaque(false);
-        JLabel titleLabel = new JLabel("AI Study Assistant", SwingConstants.LEFT);
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
-        topToolbar.add(titleLabel, BorderLayout.WEST);
+        
+        JPanel titlePanel = new JPanel(new GridLayout(2, 1, 2, 2));
+        titlePanel.setOpaque(false);
+        JLabel titleLabel = new JLabel("🤖 Study Coach", SwingConstants.LEFT);
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
+        titlePanel.add(titleLabel);
+        
+        JLabel modelLabel = new JLabel("Model: google/gemma-4-26b-a4b-it:free (OpenRouter)", SwingConstants.LEFT);
+        modelLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        modelLabel.setForeground(Color.GRAY);
+        titlePanel.add(modelLabel);
+        
+        topToolbar.add(titlePanel, BorderLayout.WEST);
         
         JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         topButtons.setOpaque(false);
         
         ModernButton changeKeyBtn = new ModernButton("Change API Key");
+        changeKeyBtn.setPreferredSize(new Dimension(120, 26));
         changeKeyBtn.addActionListener(e -> {
-            int res = JOptionPane.showConfirmDialog(this, "Are you sure you want to log out/change your API key?", "Change Key", JOptionPane.YES_NO_OPTION);
+            int res = JOptionPane.showConfirmDialog(this, "Are you sure you want to change your API key?", "Change Key", JOptionPane.YES_NO_OPTION);
             if (res == JOptionPane.YES_OPTION) {
                 storageService.saveOpenRouterApiKey("");
                 openRouterKeyField.setText("");
@@ -3984,6 +4011,7 @@ public class AppFrame extends JFrame {
         });
         
         ModernButton clearChatBtn = new ModernButton("Clear Chat");
+        clearChatBtn.setPreferredSize(new Dimension(100, 26));
         clearChatBtn.addActionListener(e -> {
             aiChatHistoryList.clear();
             addSystemWelcomeMessage();
@@ -4001,30 +4029,60 @@ public class AppFrame extends JFrame {
         aiChatLogPane.putClientProperty(javax.swing.JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
         
         JScrollPane logScroll = new JScrollPane(aiChatLogPane);
-        logScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+        logScroll.setBorder(BorderFactory.createEmptyBorder()); // Zero border looks much cleaner!
         chatCard.add(logScroll, BorderLayout.CENTER);
         
-        // Bottom send pane
-        JPanel bottomPanel = new JPanel(new BorderLayout(8, 8));
-        bottomPanel.setOpaque(false);
+        // Bottom send pane with suggestions
+        JPanel bottomContainer = new JPanel(new BorderLayout(6, 6));
+        bottomContainer.setOpaque(false);
         
-        JPanel inputPanel = new JPanel(new BorderLayout(8, 0));
-        inputPanel.setOpaque(false);
+        // Suggestions panel
+        JPanel suggestionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        suggestionPanel.setOpaque(false);
+        
+        String[][] suggestions = {
+            {"🔥 Burnout Risk", "Check if I am at risk of burnout based on my study hours and breaks."},
+            {"📊 Stats Summary", "Summarize my study statistics and streaks for the last 3 days."},
+            {"💡 Focus Tips", "Provide some actionable advice to improve my cognitive focus score."}
+        };
+        
+        for (String[] sug : suggestions) {
+            ModernButton chip = new ModernButton(sug[0]);
+            chip.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            chip.setPreferredSize(new Dimension(120, 22));
+            chip.addActionListener(e -> {
+                aiInputTextArea.setText(sug[1]);
+                sendChatToAI();
+            });
+            suggestionPanel.add(chip);
+        }
+        bottomContainer.add(suggestionPanel, BorderLayout.NORTH);
+        
+        // Padded Modern Input Bar
+        JPanel inputBar = new JPanel(new BorderLayout(8, 0));
+        inputBar.setName("summaryPanel"); // inherits cardBg from theme
+        inputBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1),
+            BorderFactory.createEmptyBorder(6, 10, 6, 10)
+        ));
         
         aiInputTextArea.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        aiInputTextArea.setBorder(BorderFactory.createEmptyBorder());
+        aiInputTextArea.setOpaque(false);
         aiInputTextArea.addActionListener(e -> sendChatToAI());
-        inputPanel.add(aiInputTextArea, BorderLayout.CENTER);
+        inputBar.add(aiInputTextArea, BorderLayout.CENTER);
         
+        aiSendBtn.setPreferredSize(new Dimension(75, 26));
         aiSendBtn.addActionListener(e -> sendChatToAI());
-        inputPanel.add(aiSendBtn, BorderLayout.EAST);
+        inputBar.add(aiSendBtn, BorderLayout.EAST);
         
-        bottomPanel.add(inputPanel, BorderLayout.CENTER);
+        bottomContainer.add(inputBar, BorderLayout.CENTER);
         
         aiStatusLabel.setFont(new Font("SansSerif", Font.ITALIC, 11));
         aiStatusLabel.setForeground(Color.GRAY);
-        bottomPanel.add(aiStatusLabel, BorderLayout.SOUTH);
+        bottomContainer.add(aiStatusLabel, BorderLayout.SOUTH);
         
-        chatCard.add(bottomPanel, BorderLayout.SOUTH);
+        chatCard.add(bottomContainer, BorderLayout.SOUTH);
         
         // Add to main card panel
         aiCardPanel.add(setupCard, "KEY_SETUP");
@@ -4054,7 +4112,7 @@ public class AppFrame extends JFrame {
 
     private void addSystemWelcomeMessage() {
         aiChatHistoryList.add(new ChatTurn("assistant", 
-            "Hello! I am your AI Study Assistant. I can help analyze your logged hours, " +
+            "Hello! I am your AI Study Coach. I can help analyze your logged hours, " +
             "study habits, subject/chapter breakdown, and revision topics. Ask me questions like:\n\n" +
             "- **\"Am I at risk of burnout based on my breaks?\"**\n" +
             "- **\"Which chapters should I prioritize?\"**\n" +
@@ -4410,6 +4468,10 @@ public class AppFrame extends JFrame {
         ThemeManager.AppTheme theme = ThemeManager.loadTheme();
         ThemeManager.ThemeColors colors = ThemeManager.getColors(theme);
         
+        if (aiChatLogPane != null) {
+            aiChatLogPane.setBackground(colors.bg);
+        }
+        
         String hexBg = toHexString(colors.bg);
         String hexText = toHexString(colors.text);
         
@@ -4429,8 +4491,8 @@ public class AppFrame extends JFrame {
             aiBubbleBg = "#000000";
             aiBubbleText = "#ffffff";
         } else { // LIGHT
-            userBubbleBg = "#0d6eff";
-            userBubbleText = "#ffffff";
+            userBubbleBg = "#e3f2fd"; // Soft blue bubble
+            userBubbleText = "#0d47a1"; // Dark blue text
             aiBubbleBg = "#ffffff";
             aiBubbleText = "#212529";
         }
@@ -4438,7 +4500,7 @@ public class AppFrame extends JFrame {
         StringBuilder sb = new StringBuilder();
         sb.append("<html><body style='background-color: ").append(hexBg)
           .append("; color: ").append(hexText)
-          .append("; font-family: sans-serif; font-size: 11px; margin: 10px;'>");
+          .append("; font-family: sans-serif; font-size: 12px; line-height: 1.4; margin: 10px;'>");
           
         for (ChatTurn turn : aiChatHistoryList) {
             boolean isUser = "user".equals(turn.role);
@@ -4447,13 +4509,13 @@ public class AppFrame extends JFrame {
             String bubbleText = isUser ? userBubbleText : aiBubbleText;
             String borderStyle = (theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "border: 1px solid #ffffff;" : "border: 1px solid " + toHexString(colors.border) + ";";
             
-            sb.append("<table width='100%' cellpadding='0' cellspacing='0' border='0' style='margin-bottom: 8px;'>")
+            sb.append("<table width='100%' cellpadding='0' cellspacing='0' border='0' style='margin-bottom: 10px;'>")
               .append("<tr><td align='").append(align).append("'>");
               
             sb.append("<div style='background-color: ").append(bubbleBg)
               .append("; color: ").append(bubbleText)
               .append("; ").append(borderStyle)
-              .append(" padding: 8px 12px; max-width: 80%; font-family: sans-serif;'>");
+              .append(" padding: 10px 14px; max-width: 80%; font-family: sans-serif;'>");
             
             if (isUser) {
                 sb.append(escapeHtml(turn.text).replace("\n", "<br>"));

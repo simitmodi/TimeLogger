@@ -28,3 +28,7 @@ backups/
 # Crash logs
 hs_err_pid*.log
 
+# API Keys
+openrouter_api_key.txt
+.timelogger_openrouter_key
+
