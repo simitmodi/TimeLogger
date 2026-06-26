@@ -4220,7 +4220,7 @@ public class AppFrame extends JFrame {
                 // Build payload
                 StringBuilder json = new StringBuilder();
                 json.append("{\n");
-                json.append("  \"model\": \"google/gemini-2.5-flash\",\n");
+                json.append("  \"model\": \"google/gemma-4-26b-a4b-it:free\",\n");
                 json.append("  \"messages\": [\n");
                 
                 String systemContext = compileAIPromptContext();
