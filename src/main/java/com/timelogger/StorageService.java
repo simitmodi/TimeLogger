@@ -274,6 +274,29 @@ public class StorageService {
         }
     }
 
+    public String loadOpenRouterModel() {
+        Path file = Paths.get(System.getProperty("user.home"), ".timelogger_openrouter_model");
+        try {
+            if (!Files.exists(file)) {
+                return "google/gemma-4-26b-a4b-it:free";
+            }
+            return Files.readString(file, StandardCharsets.UTF_8).trim();
+        } catch (Exception e) {
+            return "google/gemma-4-26b-a4b-it:free";
+        }
+    }
+
+    public void saveOpenRouterModel(String model) {
+        Path file = Paths.get(System.getProperty("user.home"), ".timelogger_openrouter_model");
+        try {
+            Files.writeString(file, model.trim(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save OpenRouter model selection", e);
+        }
+    }
+
+
     private void addToZip(java.util.zip.ZipOutputStream zos, Path file, String zipEntryName) throws IOException {
         if (!Files.exists(file)) return;
         java.util.zip.ZipEntry entry = new java.util.zip.ZipEntry(zipEntryName);

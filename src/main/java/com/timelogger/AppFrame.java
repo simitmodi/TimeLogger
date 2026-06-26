@@ -3988,10 +3988,35 @@ public class AppFrame extends JFrame {
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
         titlePanel.add(titleLabel);
         
-        JLabel modelLabel = new JLabel("Model: google/gemma-4-26b-a4b-it:free (OpenRouter)", SwingConstants.LEFT);
+        JPanel modelSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        modelSelectionPanel.setOpaque(false);
+        JLabel modelLabel = new JLabel("Model:", SwingConstants.LEFT);
         modelLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         modelLabel.setForeground(Color.GRAY);
-        titlePanel.add(modelLabel);
+        modelSelectionPanel.add(modelLabel);
+
+        JComboBox<String> modelCombo = new JComboBox<>(new String[]{
+            "google/gemma-4-26b-a4b-it:free",
+            "openai/gpt-oss-120b:free",
+            "qwen/qwen3-next-80b-a3b-instruct:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "qwen/qwen3-coder:free",
+            "meta-llama/llama-3.3-70b-instruct:free"
+        });
+        modelCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        modelCombo.setPreferredSize(new Dimension(250, 22));
+        
+        String savedModel = storageService.loadOpenRouterModel();
+        modelCombo.setSelectedItem(savedModel);
+        
+        modelCombo.addActionListener(e -> {
+            String selected = (String) modelCombo.getSelectedItem();
+            if (selected != null) {
+                storageService.saveOpenRouterModel(selected);
+            }
+        });
+        modelSelectionPanel.add(modelCombo);
+        titlePanel.add(modelSelectionPanel);
         
         topToolbar.add(titlePanel, BorderLayout.WEST);
         
@@ -4276,9 +4301,10 @@ public class AppFrame extends JFrame {
                 }
                 
                 // Build payload
+                String selectedModel = storageService.loadOpenRouterModel();
                 StringBuilder json = new StringBuilder();
                 json.append("{\n");
-                json.append("  \"model\": \"google/gemma-4-26b-a4b-it:free\",\n");
+                json.append("  \"model\": \"").append(escapeJson(selectedModel)).append("\",\n");
                 json.append("  \"messages\": [\n");
                 
                 String systemContext = compileAIPromptContext();
@@ -4557,6 +4583,7 @@ public class AppFrame extends JFrame {
         boolean inList = false;
         boolean inOrderedList = false;
         boolean inCodeBlock = false;
+        boolean inTable = false;
         
         ThemeManager.AppTheme theme = ThemeManager.loadTheme();
         String codeBg = (theme == ThemeManager.AppTheme.DARK) ? "#3a3a42" : ((theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "#000000" : "#e9ecef");
@@ -4566,7 +4593,9 @@ public class AppFrame extends JFrame {
         for (String line : lines) {
             String trimmed = line.trim();
             
+            // Handle code blocks (e.g., ```java)
             if (trimmed.startsWith("```")) {
+                if (inTable) { html.append("</table>"); inTable = false; }
                 if (inCodeBlock) {
                     html.append("</div>");
                     inCodeBlock = false;
@@ -4585,6 +4614,54 @@ public class AppFrame extends JFrame {
                 continue;
             }
             
+            // Handle Markdown Tables
+            boolean isTableRow = trimmed.startsWith("|") && trimmed.contains("|");
+            if (isTableRow) {
+                boolean isSeparator = trimmed.replaceAll("[\\s\\-:\\|]", "").isEmpty();
+                if (isSeparator) {
+                    if (!inTable) {
+                        inTable = true;
+                    }
+                    continue;
+                }
+                
+                if (inList) { html.append("</ul>"); inList = false; }
+                if (inOrderedList) { html.append("</ol>"); inOrderedList = false; }
+                
+                String borderCol = toHexString(ThemeManager.getColors(theme).border);
+                
+                if (!inTable) {
+                    String headerBg = (theme == ThemeManager.AppTheme.DARK) ? "#3a3a42" : ((theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "#000000" : "#f1f3f5");
+                    html.append("<table border='1' cellpadding='4' cellspacing='0' style='border-collapse: collapse; border: 1px solid ")
+                        .append(borderCol).append("; margin-top: 6px; margin-bottom: 6px; width: 100%; font-size: 11px;'>");
+                    inTable = true;
+                    
+                    html.append("<tr style='background-color: ").append(headerBg).append(";'>");
+                    String[] cells = splitTableRow(trimmed);
+                    for (String cell : cells) {
+                        html.append("<th align='left' style='border: 1px solid ").append(borderCol).append("; padding: 4px;'><b>")
+                            .append(formatInlineMarkdown(cell, codeBg, codeColor))
+                            .append("</b></th>");
+                    }
+                    html.append("</tr>");
+                } else {
+                    html.append("<tr>");
+                    String[] cells = splitTableRow(trimmed);
+                    for (String cell : cells) {
+                        html.append("<td style='border: 1px solid ").append(borderCol).append("; padding: 4px;'>")
+                            .append(formatInlineMarkdown(cell, codeBg, codeColor))
+                            .append("</td>");
+                    }
+                    html.append("</tr>");
+                }
+                continue;
+            } else {
+                if (inTable) {
+                    html.append("</table>");
+                    inTable = false;
+                }
+            }
+            
             boolean isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
             boolean isNumbered = trimmed.matches("^\\d+\\.\\s.*");
             
@@ -4598,7 +4675,7 @@ public class AppFrame extends JFrame {
                     inList = true;
                 }
                 String content = trimmed.substring(2);
-                html.append("<li>").append(formatInlineMarkdown(content, codeBg, codeColor)).append("</li>");
+                html.append("<li style='margin-bottom: 2px;'>").append(formatInlineMarkdown(content, codeBg, codeColor)).append("</li>");
                 continue;
             } else if (isNumbered) {
                 if (!inOrderedList) {
@@ -4611,7 +4688,7 @@ public class AppFrame extends JFrame {
                 }
                 int dotIdx = trimmed.indexOf('.');
                 String content = trimmed.substring(dotIdx + 1).trim();
-                html.append("<li>").append(formatInlineMarkdown(content, codeBg, codeColor)).append("</li>");
+                html.append("<li style='margin-bottom: 2px;'>").append(formatInlineMarkdown(content, codeBg, codeColor)).append("</li>");
                 continue;
             } else {
                 if (inList) {
@@ -4625,23 +4702,23 @@ public class AppFrame extends JFrame {
             }
             
             if (trimmed.startsWith("### ")) {
-                html.append("<h4 style='margin-top: 6px; margin-bottom: 4px;'>")
+                html.append("<div style='font-size: 13px; font-weight: bold; margin-top: 8px; margin-bottom: 4px;'>")
                     .append(formatInlineMarkdown(trimmed.substring(4), codeBg, codeColor))
-                    .append("</h4>");
+                    .append("</div>");
             } else if (trimmed.startsWith("## ")) {
-                html.append("<h3 style='margin-top: 8px; margin-bottom: 4px;'>")
+                html.append("<div style='font-size: 14px; font-weight: bold; margin-top: 10px; margin-bottom: 4px;'>")
                     .append(formatInlineMarkdown(trimmed.substring(3), codeBg, codeColor))
-                    .append("</h3>");
+                    .append("</div>");
             } else if (trimmed.startsWith("# ")) {
-                html.append("<h2 style='margin-top: 10px; margin-bottom: 6px;'>")
+                html.append("<div style='font-size: 16px; font-weight: bold; margin-top: 12px; margin-bottom: 6px;'>")
                     .append(formatInlineMarkdown(trimmed.substring(2), codeBg, codeColor))
-                    .append("</h2>");
+                    .append("</div>");
             } else if (trimmed.isEmpty()) {
-                html.append("<br>");
+                html.append("<div style='height: 4px;'></div>");
             } else {
-                html.append("<p style='margin-top: 2px; margin-bottom: 2px;'>")
+                html.append("<div style='margin-bottom: 4px;'>")
                     .append(formatInlineMarkdown(line, codeBg, codeColor))
-                    .append("</p>");
+                    .append("</div>");
             }
         }
         
@@ -4654,8 +4731,25 @@ public class AppFrame extends JFrame {
         if (inCodeBlock) {
             html.append("</div>");
         }
+        if (inTable) {
+            html.append("</table>");
+        }
         
         return html.toString();
+    }
+
+    private String[] splitTableRow(String row) {
+        if (row.startsWith("|")) {
+            row = row.substring(1);
+        }
+        if (row.endsWith("|")) {
+            row = row.substring(0, row.length() - 1);
+        }
+        String[] parts = row.split("\\|");
+        for (int i = 0; i < parts.length; i++) {
+            parts[i] = parts[i].trim();
+        }
+        return parts;
     }
 
     private String formatInlineMarkdown(String text, String codeBg, String codeColor) {

@@ -52,7 +52,7 @@ if (Test-Path $jarPath) {
         Remove-Item -Force $jarPath
     } catch {
         Write-Host "JAR is locked. Terminating running TimeLogger instances..."
-        Stop-Process -Name java, javaw -Force -ErrorAction SilentlyContinue
+        Stop-Process -Name java, javaw, TimeLogger -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 500
         Remove-Item -Force $jarPath
     }
@@ -104,3 +104,17 @@ if ($hasJarExe) {
 }
 
 Write-Host "Build successful: $jarPath"
+
+$appJarPath = Join-Path $root "dist\TimeLogger\app\time-logger.jar"
+if (Test-Path (Split-Path -Parent $appJarPath)) {
+    try {
+        Copy-Item -Path $jarPath -Destination $appJarPath -Force
+        Write-Host "Copied built JAR to native launcher app folder: $appJarPath"
+    } catch {
+        Write-Host "Native launcher JAR is locked. Terminating running TimeLogger instances..."
+        Stop-Process -Name java, javaw, TimeLogger -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+        Copy-Item -Path $jarPath -Destination $appJarPath -Force
+        Write-Host "Copied built JAR to native launcher app folder: $appJarPath"
+    }
+}
