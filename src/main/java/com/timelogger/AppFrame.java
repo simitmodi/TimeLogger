@@ -18,6 +18,7 @@ import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.JTextPane;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SpinnerDateModel;
 import javax.swing.SwingConstants;
@@ -405,6 +406,7 @@ public class AppFrame extends JFrame {
         tabs.addTab("Analysis", createAnalysisPanel());
         tabs.addTab("Insights", createInsightsPanel());
         tabs.addTab("Subjects", createSubjectsPanel());
+        tabs.addTab("AI Assistant", createAiAssistantPanel());
         return tabs;
     }
 
@@ -2837,6 +2839,9 @@ public class AppFrame extends JFrame {
         if (miniWindow != null) {
             ThemeManager.applyTheme(miniWindow, colors);
         }
+        if (aiChatLogPane != null) {
+            rebuildChatHtml();
+        }
         this.repaint();
     }
 
@@ -3885,6 +3890,717 @@ public class AppFrame extends JFrame {
             }
             g2.dispose();
         }
+    }
+
+    // --- AI Assistant UI & Logic ---
+
+    private javax.swing.JComponent createAiAssistantPanel() {
+        // Main key setup card
+        JPanel setupCard = new JPanel(new GridBagLayout());
+        setupCard.setName("summaryPanel"); // inherits cardBg from theme
+        setupCard.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
+        
+        JPanel setupInner = new JPanel(new GridBagLayout());
+        setupInner.setName("summaryPanel");
+        setupInner.setBorder(BorderFactory.createTitledBorder("OpenRouter API Key Setup"));
+        
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        
+        JLabel descLabel = new JLabel("To enable the AI Study Assistant, please provide your OpenRouter API Key.");
+        descLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        setupInner.add(descLabel, gbc);
+        
+        gbc.gridy = 1;
+        JPanel keyInputPanel = new JPanel(new BorderLayout(8, 0));
+        keyInputPanel.setOpaque(false);
+        keyInputPanel.add(new JLabel("API Key: "), BorderLayout.WEST);
+        openRouterKeyField.setEchoChar('•');
+        keyInputPanel.add(openRouterKeyField, BorderLayout.CENTER);
+        setupInner.add(keyInputPanel, gbc);
+        
+        gbc.gridy = 2;
+        ModernButton saveKeyBtn = new ModernButton("Save API Key");
+        saveKeyBtn.addActionListener(e -> {
+            String key = new String(openRouterKeyField.getPassword()).trim();
+            if (key.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "API Key cannot be empty.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            try {
+                storageService.saveOpenRouterApiKey(key);
+                showChatInterface();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Failed to save key: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        setupInner.add(saveKeyBtn, gbc);
+        
+        gbc.gridy = 3;
+        JLabel linkLabel = new JLabel("<html>Don't have an API key? <a href='https://openrouter.ai/keys'>Get one from OpenRouter</a></html>");
+        linkLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        linkLabel.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                try {
+                    java.awt.Desktop.getDesktop().browse(new java.net.URI("https://openrouter.ai/keys"));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+        setupInner.add(linkLabel, gbc);
+        
+        // Center the inner panel in setupCard
+        setupCard.add(setupInner, new GridBagConstraints());
+        
+        // Chat panel card
+        JPanel chatCard = new JPanel(new BorderLayout(12, 12));
+        chatCard.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        
+        // Top Toolbar
+        JPanel topToolbar = new JPanel(new BorderLayout(8, 8));
+        topToolbar.setOpaque(false);
+        JLabel titleLabel = new JLabel("AI Study Assistant", SwingConstants.LEFT);
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
+        topToolbar.add(titleLabel, BorderLayout.WEST);
+        
+        JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        topButtons.setOpaque(false);
+        
+        ModernButton changeKeyBtn = new ModernButton("Change API Key");
+        changeKeyBtn.addActionListener(e -> {
+            int res = JOptionPane.showConfirmDialog(this, "Are you sure you want to log out/change your API key?", "Change Key", JOptionPane.YES_NO_OPTION);
+            if (res == JOptionPane.YES_OPTION) {
+                storageService.saveOpenRouterApiKey("");
+                openRouterKeyField.setText("");
+                java.awt.CardLayout cl = (java.awt.CardLayout) aiCardPanel.getLayout();
+                cl.show(aiCardPanel, "KEY_SETUP");
+            }
+        });
+        
+        ModernButton clearChatBtn = new ModernButton("Clear Chat");
+        clearChatBtn.addActionListener(e -> {
+            aiChatHistoryList.clear();
+            addSystemWelcomeMessage();
+            rebuildChatHtml();
+        });
+        
+        topButtons.add(changeKeyBtn);
+        topButtons.add(clearChatBtn);
+        topToolbar.add(topButtons, BorderLayout.EAST);
+        chatCard.add(topToolbar, BorderLayout.NORTH);
+        
+        // Chat log scroll pane
+        aiChatLogPane.setContentType("text/html");
+        aiChatLogPane.setEditable(false);
+        aiChatLogPane.putClientProperty(javax.swing.JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        
+        JScrollPane logScroll = new JScrollPane(aiChatLogPane);
+        logScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+        chatCard.add(logScroll, BorderLayout.CENTER);
+        
+        // Bottom send pane
+        JPanel bottomPanel = new JPanel(new BorderLayout(8, 8));
+        bottomPanel.setOpaque(false);
+        
+        JPanel inputPanel = new JPanel(new BorderLayout(8, 0));
+        inputPanel.setOpaque(false);
+        
+        aiInputTextArea.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        aiInputTextArea.addActionListener(e -> sendChatToAI());
+        inputPanel.add(aiInputTextArea, BorderLayout.CENTER);
+        
+        aiSendBtn.addActionListener(e -> sendChatToAI());
+        inputPanel.add(aiSendBtn, BorderLayout.EAST);
+        
+        bottomPanel.add(inputPanel, BorderLayout.CENTER);
+        
+        aiStatusLabel.setFont(new Font("SansSerif", Font.ITALIC, 11));
+        aiStatusLabel.setForeground(Color.GRAY);
+        bottomPanel.add(aiStatusLabel, BorderLayout.SOUTH);
+        
+        chatCard.add(bottomPanel, BorderLayout.SOUTH);
+        
+        // Add to main card panel
+        aiCardPanel.add(setupCard, "KEY_SETUP");
+        aiCardPanel.add(chatCard, "CHAT");
+        
+        // Check if key is already saved
+        String savedKey = storageService.loadOpenRouterApiKey();
+        if (savedKey.isEmpty()) {
+            java.awt.CardLayout cl = (java.awt.CardLayout) aiCardPanel.getLayout();
+            cl.show(aiCardPanel, "KEY_SETUP");
+        } else {
+            openRouterKeyField.setText(savedKey);
+            javax.swing.SwingUtilities.invokeLater(this::showChatInterface);
+        }
+        
+        return aiCardPanel;
+    }
+
+    private void showChatInterface() {
+        java.awt.CardLayout cl = (java.awt.CardLayout) aiCardPanel.getLayout();
+        cl.show(aiCardPanel, "CHAT");
+        if (aiChatHistoryList.isEmpty()) {
+            addSystemWelcomeMessage();
+        }
+        rebuildChatHtml();
+    }
+
+    private void addSystemWelcomeMessage() {
+        aiChatHistoryList.add(new ChatTurn("assistant", 
+            "Hello! I am your AI Study Assistant. I can help analyze your logged hours, " +
+            "study habits, subject/chapter breakdown, and revision topics. Ask me questions like:\n\n" +
+            "- **\"Am I at risk of burnout based on my breaks?\"**\n" +
+            "- **\"Which chapters should I prioritize?\"**\n" +
+            "- **\"Summarize my study statistics for the last 3 days.\"**"));
+    }
+
+    private String compileAIPromptContext() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are the AI Study Assistant for Time Logger. Below is the user's local study and tracking data. ");
+        sb.append("Use this data to answer their questions accurately, provide personalized coaching, identify habit trends, ");
+        sb.append("and suggest productivity improvements.\n\n");
+        
+        sb.append("### STUDY METRICS OVERVIEW (Last 7 Days):\n");
+        
+        List<SessionRecord> allSessions = storageService.loadSessions();
+        LocalDate today = LocalDate.now();
+        LocalDate sevenDaysAgo = today.minusDays(6);
+        
+        List<SessionRecord> recentSessions = allSessions.stream()
+            .filter(s -> !s.getStartTime().toLocalDate().isBefore(sevenDaysAgo) && !s.getStartTime().toLocalDate().isAfter(today))
+            .collect(Collectors.toList());
+            
+        double totalHours = recentSessions.stream()
+            .mapToLong(SessionRecord::getDurationSeconds)
+            .sum() / 3600.0;
+        sb.append("- Total Hours Tracked: ").append(String.format("%.2f hrs\n", totalHours));
+        
+        java.util.Set<LocalDate> activeDates = recentSessions.stream()
+            .map(s -> s.getStartTime().toLocalDate())
+            .collect(Collectors.toSet());
+        sb.append("- Active Days: ").append(activeDates.size()).append(" / 7 days\n");
+        
+        GoalStreakStats streakStats = calculateGoalStreakStats();
+        sb.append("- Current Streak: ").append(streakStats.currentStreak).append(" days\n");
+        sb.append("- Max Streak: ").append(streakStats.maxStreak).append(" days\n");
+        sb.append("- Today's Goal Progress: ").append(streakStats.todayMinutes).append(" / ").append(streakStats.dailyGoalMinutes).append(" mins (Goal Met: ").append(streakStats.todayGoalMet).append(")\n");
+        
+        // Calculate burnout risk & productivity using same formulas
+        double totalBreakRatioSum = 0;
+        int activeDaysWithSessions = 0;
+        java.util.Map<LocalDate, List<SessionRecord>> sessionsByDate = recentSessions.stream()
+            .collect(Collectors.groupingBy(s -> s.getStartTime().toLocalDate()));
+        for (java.util.Map.Entry<LocalDate, List<SessionRecord>> entry : sessionsByDate.entrySet()) {
+            List<SessionRecord> dailySessions = new ArrayList<>(entry.getValue());
+            dailySessions.sort(java.util.Comparator.comparing(SessionRecord::getStartTime));
+            long activeSeconds = dailySessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
+            long breakSeconds = 0;
+            for (int i = 0; i < dailySessions.size() - 1; i++) {
+                LocalDateTime endPrev = dailySessions.get(i).getEndTime();
+                LocalDateTime startNext = dailySessions.get(i+1).getStartTime();
+                long gap = java.time.Duration.between(endPrev, startNext).toSeconds();
+                if (gap > 0) {
+                    breakSeconds += gap;
+                }
+            }
+            if (activeSeconds > 0) {
+                totalBreakRatioSum += (double) breakSeconds / activeSeconds;
+                activeDaysWithSessions++;
+            }
+        }
+        double avgBreakRatio = activeDaysWithSessions > 0 ? (totalBreakRatioSum / activeDaysWithSessions) : 1.0;
+        
+        double burnoutScore = totalHours * 1.5;
+        if (activeDates.size() > 0 && avgBreakRatio < 0.15) {
+            burnoutScore += 20.0;
+        }
+        int riskPercent = (int) Math.max(0, Math.min(100, burnoutScore));
+        sb.append("- Burnout Risk Score: ").append(riskPercent).append("%\n");
+        
+        double dailyGoalHrs = streakStats.dailyGoalMinutes / 60.0;
+        double targetHours = dailyGoalHrs * 7.0;
+        double goalAchievementRate = targetHours > 0 ? Math.min(1.0, totalHours / targetHours) : 1.0;
+        double pacingFactor = 1.0 - (riskPercent / 200.0);
+        int prodIndex = (int) (goalAchievementRate * pacingFactor * 100.0);
+        sb.append("- Productivity Index: ").append(prodIndex).append(" / 100\n");
+        
+        double avgAttentionSpanMin = 0;
+        double avgFocusScore = 0;
+        if (!recentSessions.isEmpty()) {
+            long totalActiveSec = recentSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
+            long totalBlocks = recentSessions.stream().mapToLong(s -> getSessionPauseCount(s) + 1).sum();
+            avgAttentionSpanMin = (totalActiveSec / (double) totalBlocks) / 60.0;
+            avgFocusScore = recentSessions.stream().mapToInt(this::calculateSessionFocusScore).average().orElse(0.0);
+        }
+        sb.append("- Avg Attention Span: ").append(String.format("%.1f mins\n", avgAttentionSpanMin));
+        sb.append("- Cognitive Focus Score: ").append(String.format("%.1f / 100\n", avgFocusScore));
+        
+        // Subject Breakdown
+        sb.append("\n### SUBJECT & CHAPTER BREAKDOWN (Last 7 Days):\n");
+        java.util.Map<String, Long> subjectDurations = new java.util.HashMap<>();
+        for (SessionRecord s : recentSessions) {
+            String subj = s.getSubject();
+            subjectDurations.put(subj, subjectDurations.getOrDefault(subj, 0L) + s.getDurationSeconds());
+        }
+        for (java.util.Map.Entry<String, Long> entry : subjectDurations.entrySet()) {
+            sb.append("- ").append(entry.getKey()).append(": ").append(formatDuration(entry.getValue())).append("\n");
+        }
+        
+        // Revision Topics
+        sb.append("\n### REVISION TOPICS (Last 7 Days):\n");
+        java.util.Map<String, Long> revisionDurations = new java.util.HashMap<>();
+        for (SessionRecord s : recentSessions) {
+            String desc = s.getDescription();
+            if (desc.startsWith("Revision: ")) {
+                String topic = desc.substring("Revision: ".length()).trim();
+                if (topic.isEmpty()) topic = "General/Unnamed";
+                revisionDurations.put(topic, revisionDurations.getOrDefault(topic, 0L) + s.getDurationSeconds());
+            }
+        }
+        if (revisionDurations.isEmpty()) {
+            sb.append("- No revision sessions tracked yet.\n");
+        } else {
+            for (java.util.Map.Entry<String, Long> entry : revisionDurations.entrySet()) {
+                sb.append("- ").append(entry.getKey()).append(": ").append(formatDuration(entry.getValue())).append("\n");
+            }
+        }
+        
+        // Recent Session Details
+        sb.append("\n### RECENT SESSION LOGS (Last 30 Records):\n");
+        List<SessionRecord> sortedAll = new ArrayList<>(allSessions);
+        sortedAll.sort((s1, s2) -> s2.getStartTime().compareTo(s1.getStartTime())); // newest first
+        int limit = Math.min(30, sortedAll.size());
+        for (int i = 0; i < limit; i++) {
+            SessionRecord s = sortedAll.get(i);
+            sb.append(String.format("- [%s] Subj: %s, Duration: %s, Type: %s, Desc: %s (Pauses: %d)\n",
+                s.getStartTime().toLocalDate().toString(),
+                s.getSubject(),
+                formatDuration(s.getDurationSeconds()),
+                s.getType().name(),
+                s.getDescription(),
+                s.getPauseCount()
+            ));
+        }
+        
+        sb.append("\nWhen answering, respond concisely using markdown formatting. High contrast or bullet points are encouraged. Do not refer to internal implementation details unless asked.");
+        return sb.toString();
+    }
+
+    private void sendChatToAI() {
+        String userInput = aiInputTextArea.getText().trim();
+        if (userInput.isEmpty()) return;
+        
+        aiInputTextArea.setText("");
+        aiInputTextArea.setEnabled(false);
+        aiSendBtn.setEnabled(false);
+        aiStatusLabel.setText("Thinking...");
+        
+        aiChatHistoryList.add(new ChatTurn("user", userInput));
+        rebuildChatHtml();
+        
+        new Thread(() -> {
+            try {
+                String apiKey = storageService.loadOpenRouterApiKey();
+                if (apiKey.isEmpty()) {
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        aiStatusLabel.setText("API key missing. Please reset API key.");
+                        aiInputTextArea.setEnabled(true);
+                        aiSendBtn.setEnabled(true);
+                    });
+                    return;
+                }
+                
+                // Build payload
+                StringBuilder json = new StringBuilder();
+                json.append("{\n");
+                json.append("  \"model\": \"google/gemini-2.5-flash\",\n");
+                json.append("  \"messages\": [\n");
+                
+                String systemContext = compileAIPromptContext();
+                json.append("    {\"role\": \"system\", \"content\": \"").append(escapeJson(systemContext)).append("\"}");
+                
+                for (ChatTurn turn : aiChatHistoryList) {
+                    json.append(",\n");
+                    json.append("    {\"role\": \"").append(escapeJson(turn.role)).append("\", \"content\": \"").append(escapeJson(turn.text)).append("\"}");
+                }
+                
+                json.append("\n  ]\n");
+                json.append("}");
+                
+                java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(15))
+                    .build();
+                    
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://openrouter.ai/api/v1/chat/completions"))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("HTTP-Referer", "http://localhost")
+                    .header("X-Title", "Time Logger")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json.toString(), java.nio.charset.StandardCharsets.UTF_8))
+                    .build();
+                    
+                java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                
+                if (response.statusCode() == 200) {
+                    String responseBody = response.body();
+                    String aiText = parseOpenRouterResponseText(responseBody);
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        aiChatHistoryList.add(new ChatTurn("assistant", aiText));
+                        rebuildChatHtml();
+                        aiStatusLabel.setText(" ");
+                        aiInputTextArea.setEnabled(true);
+                        aiSendBtn.setEnabled(true);
+                        aiInputTextArea.requestFocusInWindow();
+                    });
+                } else {
+                    String errBody = response.body();
+                    String errMsg = "Error: API returned status " + response.statusCode();
+                    if (errBody != null && !errBody.trim().isEmpty()) {
+                        String parsedErr = parseOpenRouterResponseText(errBody);
+                        if (parsedErr != null && !parsedErr.startsWith("Error:")) {
+                            errMsg = parsedErr;
+                        }
+                    }
+                    final String finalErrMsg = errMsg;
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        aiStatusLabel.setText(finalErrMsg);
+                        aiInputTextArea.setEnabled(true);
+                        aiSendBtn.setEnabled(true);
+                    });
+                }
+            } catch (Exception ex) {
+                String errMsg = "Connection error: " + ex.getMessage();
+                if (ex instanceof java.net.http.HttpConnectTimeoutException || ex instanceof java.net.SocketTimeoutException) {
+                    errMsg = "Connection timeout. Please check your internet connection.";
+                }
+                final String finalErrMsg = errMsg;
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    aiStatusLabel.setText(finalErrMsg);
+                    aiInputTextArea.setEnabled(true);
+                    aiSendBtn.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+
+    private String parseOpenRouterResponseText(String json) {
+        if (json == null) return "";
+        
+        int choicesIdx = json.indexOf("\"choices\"");
+        if (choicesIdx == -1) {
+            int errorIdx = json.indexOf("\"error\"");
+            if (errorIdx != -1) {
+                int messageIdx = json.indexOf("\"message\"", errorIdx);
+                if (messageIdx != -1) {
+                    int contentStart = json.indexOf("\"", messageIdx + 9);
+                    if (contentStart != -1) {
+                        int contentEnd = json.indexOf("\"", contentStart + 1);
+                        while (contentEnd != -1 && json.charAt(contentEnd - 1) == '\\') {
+                            contentEnd = json.indexOf("\"", contentEnd + 1);
+                        }
+                        if (contentEnd != -1) {
+                            return "API Error: " + unescapeJson(json.substring(contentStart + 1, contentEnd));
+                        }
+                    }
+                }
+            }
+            return "Error: Unexpected API response format.";
+        }
+        
+        int contentIdx = json.indexOf("\"content\"", choicesIdx);
+        if (contentIdx == -1) {
+            return "Error: Could not find content in choices.";
+        }
+        
+        int colonIdx = json.indexOf(":", contentIdx);
+        if (colonIdx == -1) {
+            return "Error: Invalid JSON response format.";
+        }
+        
+        int valueStart = json.indexOf("\"", colonIdx);
+        if (valueStart == -1) {
+            return "Error: Invalid JSON value format.";
+        }
+        
+        int valueEnd = json.indexOf("\"", valueStart + 1);
+        while (valueEnd != -1 && json.charAt(valueEnd - 1) == '\\') {
+            valueEnd = json.indexOf("\"", valueEnd + 1);
+        }
+        
+        if (valueEnd == -1) {
+            return "Error: Unterminated string in JSON response.";
+        }
+        
+        String rawContent = json.substring(valueStart + 1, valueEnd);
+        return unescapeJson(rawContent);
+    }
+
+    private String unescapeJson(String str) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < str.length(); i++) {
+            char ch = str.charAt(i);
+            if (ch == '\\' && i + 1 < str.length()) {
+                char next = str.charAt(i + 1);
+                switch (next) {
+                    case '"': sb.append('"'); i++; break;
+                    case '\\': sb.append('\\'); i++; break;
+                    case '/': sb.append('/'); i++; break;
+                    case 'b': sb.append('\b'); i++; break;
+                    case 'f': sb.append('\f'); i++; break;
+                    case 'n': sb.append('\n'); i++; break;
+                    case 'r': sb.append('\r'); i++; break;
+                    case 't': sb.append('\t'); i++; break;
+                    case 'u':
+                        if (i + 5 < str.length()) {
+                            String hex = str.substring(i + 2, i + 6);
+                            try {
+                                char unicode = (char) Integer.parseInt(hex, 16);
+                                sb.append(unicode);
+                                i += 5;
+                            } catch (NumberFormatException e) {
+                                sb.append('\\');
+                            }
+                        } else {
+                            sb.append('\\');
+                        }
+                        break;
+                    default:
+                        sb.append('\\');
+                }
+            } else {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\b': sb.append("\\b"); break;
+                case '\f': sb.append("\\f"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (ch < ' ') {
+                        sb.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        sb.append(ch);
+                    }
+            }
+        }
+        return sb.toString();
+    }
+
+    private void rebuildChatHtml() {
+        ThemeManager.AppTheme theme = ThemeManager.loadTheme();
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(theme);
+        
+        String hexBg = toHexString(colors.bg);
+        String hexText = toHexString(colors.text);
+        
+        String userBubbleBg;
+        String userBubbleText;
+        String aiBubbleBg;
+        String aiBubbleText;
+        
+        if (theme == ThemeManager.AppTheme.DARK) {
+            userBubbleBg = "#1f58a6";
+            userBubbleText = "#ffffff";
+            aiBubbleBg = "#2d2d34";
+            aiBubbleText = "#f0f0f5";
+        } else if (theme == ThemeManager.AppTheme.HIGH_CONTRAST) {
+            userBubbleBg = "#000000";
+            userBubbleText = "#ffff00";
+            aiBubbleBg = "#000000";
+            aiBubbleText = "#ffffff";
+        } else { // LIGHT
+            userBubbleBg = "#0d6eff";
+            userBubbleText = "#ffffff";
+            aiBubbleBg = "#ffffff";
+            aiBubbleText = "#212529";
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><body style='background-color: ").append(hexBg)
+          .append("; color: ").append(hexText)
+          .append("; font-family: sans-serif; font-size: 11px; margin: 10px;'>");
+          
+        for (ChatTurn turn : aiChatHistoryList) {
+            boolean isUser = "user".equals(turn.role);
+            String align = isUser ? "right" : "left";
+            String bubbleBg = isUser ? userBubbleBg : aiBubbleBg;
+            String bubbleText = isUser ? userBubbleText : aiBubbleText;
+            String borderStyle = (theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "border: 1px solid #ffffff;" : "border: 1px solid " + toHexString(colors.border) + ";";
+            
+            sb.append("<table width='100%' cellpadding='0' cellspacing='0' border='0' style='margin-bottom: 8px;'>")
+              .append("<tr><td align='").append(align).append("'>");
+              
+            sb.append("<div style='background-color: ").append(bubbleBg)
+              .append("; color: ").append(bubbleText)
+              .append("; ").append(borderStyle)
+              .append(" padding: 8px 12px; max-width: 80%; font-family: sans-serif;'>");
+            
+            if (isUser) {
+                sb.append(escapeHtml(turn.text).replace("\n", "<br>"));
+            } else {
+                sb.append(markdownToHtml(turn.text));
+            }
+            
+            sb.append("</div>");
+            sb.append("</td></tr></table>");
+        }
+        
+        sb.append("</body></html>");
+        
+        aiChatLogPane.setText(sb.toString());
+        
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            aiChatLogPane.setCaretPosition(aiChatLogPane.getDocument().getLength());
+        });
+    }
+
+    private String toHexString(Color color) {
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "&#x27;");
+    }
+
+    private String markdownToHtml(String markdown) {
+        if (markdown == null) return "";
+        
+        String[] lines = markdown.split("\n");
+        StringBuilder html = new StringBuilder();
+        boolean inList = false;
+        boolean inOrderedList = false;
+        boolean inCodeBlock = false;
+        
+        ThemeManager.AppTheme theme = ThemeManager.loadTheme();
+        String codeBg = (theme == ThemeManager.AppTheme.DARK) ? "#3a3a42" : ((theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "#000000" : "#e9ecef");
+        String codeColor = (theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "#ffff00" : (theme == ThemeManager.AppTheme.DARK ? "#f0f0f5" : "#212529");
+        String codeBorder = (theme == ThemeManager.AppTheme.HIGH_CONTRAST) ? "1px solid #ffffff" : "1px solid " + toHexString(ThemeManager.getColors(theme).border);
+        
+        for (String line : lines) {
+            String trimmed = line.trim();
+            
+            if (trimmed.startsWith("```")) {
+                if (inCodeBlock) {
+                    html.append("</div>");
+                    inCodeBlock = false;
+                } else {
+                    html.append("<div style='background-color: ").append(codeBg)
+                        .append("; color: ").append(codeColor)
+                        .append("; border: ").append(codeBorder)
+                        .append("; padding: 6px; font-family: monospace; white-space: pre; margin-top: 4px; margin-bottom: 4px;'>");
+                    inCodeBlock = true;
+                }
+                continue;
+            }
+            
+            if (inCodeBlock) {
+                html.append(escapeHtml(line)).append("<br>");
+                continue;
+            }
+            
+            boolean isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
+            boolean isNumbered = trimmed.matches("^\\d+\\.\\s.*");
+            
+            if (isBullet) {
+                if (!inList) {
+                    if (inOrderedList) {
+                        html.append("</ol>");
+                        inOrderedList = false;
+                    }
+                    html.append("<ul style='margin-top: 2px; margin-bottom: 2px; padding-left: 20px;'>");
+                    inList = true;
+                }
+                String content = trimmed.substring(2);
+                html.append("<li>").append(formatInlineMarkdown(content, codeBg, codeColor)).append("</li>");
+                continue;
+            } else if (isNumbered) {
+                if (!inOrderedList) {
+                    if (inList) {
+                        html.append("</ul>");
+                        inList = false;
+                    }
+                    html.append("<ol style='margin-top: 2px; margin-bottom: 2px; padding-left: 20px;'>");
+                    inOrderedList = true;
+                }
+                int dotIdx = trimmed.indexOf('.');
+                String content = trimmed.substring(dotIdx + 1).trim();
+                html.append("<li>").append(formatInlineMarkdown(content, codeBg, codeColor)).append("</li>");
+                continue;
+            } else {
+                if (inList) {
+                    html.append("</ul>");
+                    inList = false;
+                }
+                if (inOrderedList) {
+                    html.append("</ol>");
+                    inOrderedList = false;
+                }
+            }
+            
+            if (trimmed.startsWith("### ")) {
+                html.append("<h4 style='margin-top: 6px; margin-bottom: 4px;'>")
+                    .append(formatInlineMarkdown(trimmed.substring(4), codeBg, codeColor))
+                    .append("</h4>");
+            } else if (trimmed.startsWith("## ")) {
+                html.append("<h3 style='margin-top: 8px; margin-bottom: 4px;'>")
+                    .append(formatInlineMarkdown(trimmed.substring(3), codeBg, codeColor))
+                    .append("</h3>");
+            } else if (trimmed.startsWith("# ")) {
+                html.append("<h2 style='margin-top: 10px; margin-bottom: 6px;'>")
+                    .append(formatInlineMarkdown(trimmed.substring(2), codeBg, codeColor))
+                    .append("</h2>");
+            } else if (trimmed.isEmpty()) {
+                html.append("<br>");
+            } else {
+                html.append("<p style='margin-top: 2px; margin-bottom: 2px;'>")
+                    .append(formatInlineMarkdown(line, codeBg, codeColor))
+                    .append("</p>");
+            }
+        }
+        
+        if (inList) {
+            html.append("</ul>");
+        }
+        if (inOrderedList) {
+            html.append("</ol>");
+        }
+        if (inCodeBlock) {
+            html.append("</div>");
+        }
+        
+        return html.toString();
+    }
+
+    private String formatInlineMarkdown(String text, String codeBg, String codeColor) {
+        String escaped = escapeHtml(text);
+        escaped = escaped.replaceAll("\\*\\*(.*?)\\*\\*", "<b>$1</b>");
+        escaped = escaped.replaceAll("`(.*?)`", "<font face='monospace' color='" + codeColor + "' style='background-color: " + codeBg + ";'> $1 </font>");
+        return escaped;
     }
 }
 
