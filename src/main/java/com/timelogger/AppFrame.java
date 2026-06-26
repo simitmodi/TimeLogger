@@ -215,6 +215,25 @@ public class AppFrame extends JFrame {
     private final JLabel studyEfficiencyLabel = new JLabel("Study Efficiency: -", SwingConstants.CENTER);
     private final JLabel midSessionBreakLabel = new JLabel("Mid-Session Breaks: -", SwingConstants.CENTER);
 
+    // AI Assistant components
+    private final JPanel aiCardPanel = new JPanel(new java.awt.CardLayout());
+    private final JTextPane aiChatLogPane = new JTextPane();
+    private final JTextField aiInputTextArea = new JTextField();
+    private final ModernButton aiSendBtn = new ModernButton("Send");
+    private final JLabel aiStatusLabel = new JLabel(" ", SwingConstants.LEFT);
+    private final javax.swing.JPasswordField openRouterKeyField = new javax.swing.JPasswordField(30);
+    private final StringBuilder aiChatHtmlBuilder = new StringBuilder();
+    
+    private static class ChatTurn {
+        String role;
+        String text;
+        ChatTurn(String role, String text) {
+            this.role = role;
+            this.text = text;
+        }
+    }
+    private final List<ChatTurn> aiChatHistoryList = new ArrayList<>();
+
     private final JLabel goalProgressLabel = new JLabel("Today: 0 / 0 min (0%)", SwingConstants.CENTER);
     private final javax.swing.JProgressBar goalProgressBar = new javax.swing.JProgressBar(0, 100);
     private final JLabel streakLabel = new JLabel("Streak: 0 days 🔥 (Max: 0 🏆)", SwingConstants.CENTER);

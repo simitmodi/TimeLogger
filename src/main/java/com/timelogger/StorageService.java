@@ -234,6 +234,28 @@ public class StorageService {
         }
     }
 
+    public String loadOpenRouterApiKey() {
+        Path file = appDirectory.resolve("openrouter_api_key.txt");
+        try {
+            if (!Files.exists(file)) {
+                return "";
+            }
+            return Files.readString(file, StandardCharsets.UTF_8).trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public void saveOpenRouterApiKey(String apiKey) {
+        Path file = appDirectory.resolve("openrouter_api_key.txt");
+        try {
+            Files.writeString(file, apiKey.trim(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save OpenRouter API key", e);
+        }
+    }
+
     private void addToZip(java.util.zip.ZipOutputStream zos, Path file, String zipEntryName) throws IOException {
         if (!Files.exists(file)) return;
         java.util.zip.ZipEntry entry = new java.util.zip.ZipEntry(zipEntryName);
