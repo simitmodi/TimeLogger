@@ -31,7 +31,7 @@ public class MiniWindow extends JFrame {
     private final JLabel timeLabel = new JLabel("00:00:00", SwingConstants.CENTER);
     
     final JComboBox<String> miniSubjectCombo = new JComboBox<>();
-    final JComboBox<String> miniActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture"});
+    final JComboBox<String> miniActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture", "Revision"});
     final JPanel miniActivitySubPanel = new JPanel(new java.awt.CardLayout());
     final JTextField miniActivityField = new JTextField(15);
     final JComboBox<String> miniQuestionTypeCombo = new JComboBox<>(new String[]{
@@ -40,6 +40,7 @@ public class MiniWindow extends JFrame {
     final JTextField miniQuestionDescField = new JTextField(10);
     final JTextField miniChapterField = new JTextField(4);
     final JTextField miniLectureField = new JTextField(4);
+    final JTextField miniRevisionTopicField = new JTextField(15);
 
     private final ModernButton startBtn = new ModernButton("Start");
     private final ModernButton pauseBtn = new ModernButton("Pause");
@@ -94,6 +95,7 @@ public class MiniWindow extends JFrame {
             miniQuestionDescField.setText(parent.stopwatchQuestionDescField.getText());
             miniChapterField.setText(parent.stopwatchChapterField.getText());
             miniLectureField.setText(parent.stopwatchLectureField.getText());
+            miniRevisionTopicField.setText(parent.stopwatchRevisionTopicField.getText());
         } else {
             miniSubjectCombo.setSelectedItem(parent.timerSubjectCombo.getSelectedItem());
         }
@@ -108,12 +110,20 @@ public class MiniWindow extends JFrame {
             parent.stopwatchQuestionDescField.setText(miniQuestionDescField.getText());
             parent.stopwatchChapterField.setText(miniChapterField.getText());
             parent.stopwatchLectureField.setText(miniLectureField.getText());
+            parent.stopwatchRevisionTopicField.setText(miniRevisionTopicField.getText());
         } else {
             parent.timerSubjectCombo.setSelectedItem(miniSubjectCombo.getSelectedItem());
         }
     }
 
     private void initComponents() {
+        miniActivityField.setPreferredSize(new java.awt.Dimension(380, 28));
+        miniQuestionDescField.setPreferredSize(new java.awt.Dimension(150, 28));
+        miniQuestionTypeCombo.setPreferredSize(new java.awt.Dimension(180, 28));
+        miniChapterField.setPreferredSize(new java.awt.Dimension(50, 28));
+        miniLectureField.setPreferredSize(new java.awt.Dimension(50, 28));
+        miniRevisionTopicField.setPreferredSize(new java.awt.Dimension(380, 28));
+
         JPanel panel = new JPanel(new BorderLayout(8, 8));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
@@ -152,9 +162,14 @@ public class MiniWindow extends JFrame {
             lectureCard.add(new JLabel("Lec:"));
             lectureCard.add(miniLectureField);
 
+            JPanel revisionCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+            revisionCard.add(new JLabel("Topic:"));
+            revisionCard.add(miniRevisionTopicField);
+
             miniActivitySubPanel.add(generalCard, "General");
             miniActivitySubPanel.add(questionsCard, "Questions");
             miniActivitySubPanel.add(lectureCard, "Lecture");
+            miniActivitySubPanel.add(revisionCard, "Revision");
 
             java.awt.CardLayout cardLayout = (java.awt.CardLayout) miniActivitySubPanel.getLayout();
             miniActivityTypeCombo.addActionListener(e -> {
@@ -353,6 +368,7 @@ public class MiniWindow extends JFrame {
             miniQuestionDescField.setEnabled(!started);
             miniChapterField.setEnabled(!started);
             miniLectureField.setEnabled(!started);
+            miniRevisionTopicField.setEnabled(!started);
         } else {
             String subject = (String) miniSubjectCombo.getSelectedItem();
             statusLabel.setText("Timer: " + (subject != null ? subject : "None"));

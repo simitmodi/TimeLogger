@@ -95,8 +95,18 @@ public class AppFrame extends JFrame {
     private final JLabel stopwatchTimeLabel = new JLabel("00:00:00", SwingConstants.CENTER);
     private final JLabel stopwatchSubjectLabel = new JLabel("Subject: -", SwingConstants.CENTER);
     final JComboBox<String> stopwatchSubjectCombo = new JComboBox<>();
-    final JComboBox<String> stopwatchActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture"});
-    final JPanel stopwatchActivitySubPanel = new JPanel(new java.awt.CardLayout());
+    final JComboBox<String> stopwatchActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture", "Revision"});
+    final JPanel stopwatchActivitySubPanel = new JPanel(new java.awt.CardLayout()) {
+        @Override
+        public Dimension getPreferredSize() {
+            for (java.awt.Component child : getComponents()) {
+                if (child.isVisible()) {
+                    return child.getPreferredSize();
+                }
+            }
+            return super.getPreferredSize();
+        }
+    };
     final JTextField stopwatchActivityField = new JTextField(20);
     final JComboBox<String> stopwatchQuestionTypeCombo = new JComboBox<>(new String[]{
         "DPP Questions", "Practice Book Questions", "Previous Year Questions"
@@ -104,6 +114,7 @@ public class AppFrame extends JFrame {
     final JTextField stopwatchQuestionDescField = new JTextField(15);
     final JTextField stopwatchChapterField = new JTextField(5);
     final JTextField stopwatchLectureField = new JTextField(5);
+    final JTextField stopwatchRevisionTopicField = new JTextField(20);
     private final ModernButton stopwatchStartButton = new ModernButton("Start");
     private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause");
     private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log");
@@ -178,6 +189,12 @@ public class AppFrame extends JFrame {
             return false;
         }
     };
+    final DefaultTableModel revisionAnalysisModel = new DefaultTableModel(new Object[]{"Topic", "Duration"}, 0) {
+        @Override
+        public boolean isCellEditable(int row, int col) {
+            return false;
+        }
+    };
     final DefaultTableModel chapterAnalysisModel = new DefaultTableModel(new Object[]{"Subject - Chapter", "Duration"}, 0) {
         @Override
         public boolean isCellEditable(int row, int col) {
@@ -201,6 +218,9 @@ public class AppFrame extends JFrame {
     private final JLabel goalProgressLabel = new JLabel("Today: 0 / 0 min (0%)", SwingConstants.CENTER);
     private final javax.swing.JProgressBar goalProgressBar = new javax.swing.JProgressBar(0, 100);
     private final JLabel streakLabel = new JLabel("Streak: 0 days 🔥 (Max: 0 🏆)", SwingConstants.CENTER);
+    private javax.swing.border.TitledBorder timelineBorder;
+    private JPanel stopwatchConfigPanel;
+    private JPanel timerConfigPanel;
 
     public AppFrame() {
         setTitle("Time Logger");
@@ -256,6 +276,68 @@ public class AppFrame extends JFrame {
                 }
             }
         });
+
+        this.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                updateTimeLabelsFontSize();
+            }
+        });
+    }
+
+    private void applyFontToContainer(java.awt.Container container, Font labelFont, Font controlFont) {
+        for (java.awt.Component child : container.getComponents()) {
+            if (child instanceof JLabel) {
+                if (child != stopwatchSubjectLabel && child != stopwatchTimeLabel && child != timerTimeLabel) {
+                    child.setFont(labelFont);
+                }
+            } else if (child instanceof JComboBox || child instanceof JTextField || child instanceof JSpinner) {
+                child.setFont(controlFont);
+                int width = 150;
+                if (child == stopwatchActivityField || child == stopwatchQuestionDescField || child == stopwatchRevisionTopicField) {
+                    width = Math.max(300, getWidth() / 4);
+                } else if (child == stopwatchQuestionTypeCombo) {
+                    width = Math.max(200, getWidth() / 6);
+                } else if (child == stopwatchChapterField || child == stopwatchLectureField) {
+                    width = Math.max(50, getWidth() / 20);
+                } else if (child == stopwatchSubjectCombo || child == stopwatchActivityTypeCombo || child == timerSubjectCombo) {
+                    width = child.getPreferredSize().width;
+                }
+                
+                Dimension d = child.getPreferredSize();
+                child.setPreferredSize(new Dimension(width, d.height));
+            } else if (child instanceof java.awt.Container) {
+                applyFontToContainer((java.awt.Container) child, labelFont, controlFont);
+            }
+        }
+    }
+
+    private void updateTimeLabelsFontSize() {
+        int w = getWidth();
+        int h = getHeight();
+        int size = Math.max(64, Math.min(w / 10, h / 5));
+        Font f = new Font("Monospaced", Font.BOLD, size);
+        stopwatchTimeLabel.setFont(f);
+        timerTimeLabel.setFont(f);
+
+        int subjectLabelSize = Math.max(18, Math.min(w / 50, h / 30));
+        stopwatchSubjectLabel.setFont(new Font("SansSerif", Font.BOLD, subjectLabelSize));
+
+        // Scale config font size
+        int configSize = Math.max(12, Math.min(w / 70, h / 45));
+        Font labelFont = new Font("SansSerif", Font.BOLD, configSize);
+        Font controlFont = new Font("SansSerif", Font.PLAIN, configSize);
+
+        if (stopwatchConfigPanel != null) {
+            applyFontToContainer(stopwatchConfigPanel, labelFont, controlFont);
+            stopwatchConfigPanel.revalidate();
+            stopwatchConfigPanel.repaint();
+        }
+        if (timerConfigPanel != null) {
+            applyFontToContainer(timerConfigPanel, labelFont, controlFont);
+            timerConfigPanel.revalidate();
+            timerConfigPanel.repaint();
+        }
     }
 
     private JMenuBar createMenuBar() {
@@ -314,8 +396,16 @@ public class AppFrame extends JFrame {
         stopwatchTimeLabel.setFont(new Font("Monospaced", Font.BOLD, 64));
         stopwatchSubjectLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
 
+        stopwatchActivityField.setPreferredSize(new Dimension(300, 28));
+        stopwatchQuestionDescField.setPreferredSize(new Dimension(300, 28));
+        stopwatchQuestionTypeCombo.setPreferredSize(new Dimension(200, 28));
+        stopwatchChapterField.setPreferredSize(new Dimension(50, 28));
+        stopwatchLectureField.setPreferredSize(new Dimension(50, 28));
+        stopwatchRevisionTopicField.setPreferredSize(new Dimension(300, 28));
+
         JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
-        JPanel config = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        stopwatchConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        JPanel config = stopwatchConfigPanel;
         config.add(new JLabel("Subject"));
         config.add(stopwatchSubjectCombo);
         config.add(new JLabel("Activity Type"));
@@ -392,14 +482,23 @@ public class AppFrame extends JFrame {
         lectureCard.add(new JLabel("Lec No: "));
         lectureCard.add(stopwatchLectureField);
 
+        JPanel revisionCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        revisionCard.add(new JLabel("Topic: "));
+        revisionCard.add(stopwatchRevisionTopicField);
+
         stopwatchActivitySubPanel.add(generalCard, "General");
         stopwatchActivitySubPanel.add(questionsCard, "Questions");
         stopwatchActivitySubPanel.add(lectureCard, "Lecture");
+        stopwatchActivitySubPanel.add(revisionCard, "Revision");
 
         java.awt.CardLayout cardLayout = (java.awt.CardLayout) stopwatchActivitySubPanel.getLayout();
         stopwatchActivityTypeCombo.addActionListener(e -> {
             String selected = (String) stopwatchActivityTypeCombo.getSelectedItem();
             cardLayout.show(stopwatchActivitySubPanel, selected);
+            stopwatchActivitySubPanel.revalidate();
+            stopwatchActivitySubPanel.repaint();
+            config.revalidate();
+            config.repaint();
         });
 
         config.add(stopwatchActivitySubPanel);
@@ -460,7 +559,8 @@ public class AppFrame extends JFrame {
 
         timerTimeLabel.setFont(new Font("Monospaced", Font.BOLD, 64));
 
-        JPanel config = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        timerConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        JPanel config = timerConfigPanel;
         config.add(new JLabel("Hours"));
         config.add(hoursSpinner);
         config.add(new JLabel("Minutes"));
@@ -732,6 +832,10 @@ public class AppFrame extends JFrame {
                         }
                         stopwatchChapterField.setText(ch);
                         stopwatchLectureField.setText(lec);
+                    } else if (desc.startsWith("Revision: ")) {
+                        stopwatchActivityTypeCombo.setSelectedItem("Revision");
+                        String topic = desc.substring("Revision: ".length()).trim();
+                        stopwatchRevisionTopicField.setText(topic);
                     } else {
                         stopwatchActivityTypeCombo.setSelectedItem("General");
                         stopwatchActivityField.setText(desc);
@@ -877,7 +981,7 @@ public class AppFrame extends JFrame {
         filterLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
         filterBar.add(filterLabel);
         filterBar.add(analysisPeriodCombo);
-        
+        analysisPeriodCombo.setSelectedItem("Today");
         analysisPeriodCombo.addActionListener(e -> refreshAnalysis());
 
         // Top Summary Panel
@@ -952,12 +1056,21 @@ public class AppFrame extends JFrame {
         activityScroll.setPreferredSize(new Dimension(200, 140));
         activityCard.add(activityScroll, BorderLayout.CENTER);
 
+        JTable revisionTable = new JTable(revisionAnalysisModel);
+        revisionTable.setRowHeight(24);
+        JPanel revisionCard = new JPanel(new BorderLayout(8, 8));
+        revisionCard.setBorder(BorderFactory.createTitledBorder("Revision by Topic"));
+        JScrollPane revisionScroll = new JScrollPane(revisionTable);
+        revisionScroll.setPreferredSize(new Dimension(200, 140));
+        revisionCard.add(revisionScroll, BorderLayout.CENTER);
+
         JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
         dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week (Last 7 Days)"));
         dayOfWeekCard.add(weeklyBarChartPanel, BorderLayout.CENTER);
 
         JPanel timelineCard = new JPanel(new BorderLayout(8, 8));
-        timelineCard.setBorder(BorderFactory.createTitledBorder("Today's Session Timeline"));
+        timelineBorder = BorderFactory.createTitledBorder("Today's Session Timeline");
+        timelineCard.setBorder(timelineBorder);
         timelineCard.add(dailyTimelinePanel, BorderLayout.CENTER);
 
         JPanel heatmapCard = new JPanel(new BorderLayout(8, 8));
@@ -1008,11 +1121,15 @@ public class AppFrame extends JFrame {
         gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
         mainContent.add(chapterCard, gbc);
 
-        // Row 3: By Activity (Wide card: Col 0 & 1, spans 2 Cols and 1 Row)
+        // Row 3: By Activity (Col 0, spans 1 Col and 1 Row)
         gbc.gridy = 3; gbc.gridheight = 1; gbc.weighty = 0.5;
         
-        gbc.gridx = 0; gbc.gridwidth = 2; gbc.weightx = 2.0;
+        gbc.gridx = 0; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(activityCard, gbc);
+
+        // Row 3: Revision by Topic (Col 1, spans 1 Col and 1 Row)
+        gbc.gridx = 1; gbc.gridwidth = 1; gbc.weightx = 1.0;
+        mainContent.add(revisionCard, gbc);
 
         // Row 3: By Day of Week (Col 2, spans 1 Col and 1 Row)
         gbc.gridx = 2; gbc.gridwidth = 1; gbc.weightx = 1.0;
@@ -1115,6 +1232,34 @@ public class AppFrame extends JFrame {
         
         final String finalPeriod = period;
         LocalDate today = LocalDate.now();
+        boolean isSingleDay = false;
+        LocalDate singleDayTargetDate = today;
+        LocalDate endDate = today;
+
+        switch (finalPeriod) {
+            case "Today":
+                isSingleDay = true;
+                singleDayTargetDate = today;
+                endDate = today;
+                break;
+            case "Yesterday":
+                isSingleDay = true;
+                singleDayTargetDate = today.minusDays(1);
+                endDate = today.minusDays(1);
+                break;
+            default:
+                if (finalPeriod.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
+                    if (customAnalysisStartDate.equals(customAnalysisEndDate)) {
+                        isSingleDay = true;
+                        singleDayTargetDate = customAnalysisStartDate;
+                    }
+                    endDate = customAnalysisEndDate;
+                } else {
+                    endDate = today;
+                }
+                break;
+        }
+
         List<SessionRecord> sessions = rawSessions.stream()
             .filter(s -> {
                 LocalDate sDate = s.getStartTime().toLocalDate();
@@ -1185,21 +1330,88 @@ public class AppFrame extends JFrame {
         }
 
         // Goal & Streak update
-        GoalStreakStats stats = calculateGoalStreakStats();
-        goalProgressLabel.setText(String.format("Today: %d / %d mins (%d%%)", 
-            stats.todayMinutes, stats.dailyGoalMinutes, 
-            stats.dailyGoalMinutes > 0 ? (stats.todayMinutes * 100 / stats.dailyGoalMinutes) : 0));
-        
-        int percent = stats.dailyGoalMinutes > 0 ? Math.min(100, stats.todayMinutes * 100 / stats.dailyGoalMinutes) : 0;
-        goalProgressBar.setValue(percent);
-        if (stats.todayGoalMet) {
-            goalProgressBar.setForeground(new java.awt.Color(46, 139, 87));
+
+
+        int dailyGoalMinutes = storageService.loadDailyGoalMinutes();
+
+        if (isSingleDay) {
+            GoalStreakStats stats = calculateGoalStreakStats(singleDayTargetDate);
+            String labelPrefix = "Today";
+            if (finalPeriod.equals("Yesterday")) {
+                labelPrefix = "Yesterday";
+            } else if (finalPeriod.startsWith("Custom: ")) {
+                labelPrefix = singleDayTargetDate.toString();
+            }
+
+            goalProgressLabel.setText(String.format("%s: %d / %d mins (%d%%)", 
+                labelPrefix, stats.todayMinutes, stats.dailyGoalMinutes, 
+                stats.dailyGoalMinutes > 0 ? (stats.todayMinutes * 100 / stats.dailyGoalMinutes) : 0));
+            
+            int percent = stats.dailyGoalMinutes > 0 ? Math.min(100, stats.todayMinutes * 100 / stats.dailyGoalMinutes) : 0;
+            goalProgressBar.setValue(percent);
+            if (stats.todayGoalMet) {
+                goalProgressBar.setForeground(new java.awt.Color(46, 139, 87));
+            } else {
+                goalProgressBar.setForeground(new java.awt.Color(70, 130, 180));
+            }
+            
+            streakLabel.setText(String.format("Streak: %d days %s (Max: %d 🏆)", 
+                stats.currentStreak, stats.currentStreak > 0 ? "🔥" : "💤", stats.maxStreak));
         } else {
-            goalProgressBar.setForeground(new java.awt.Color(70, 130, 180));
+            long daysInPeriod = 1;
+            switch (finalPeriod) {
+                case "This Week":
+                    LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                    daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(startOfWeek, today) + 1;
+                    break;
+                case "Last 7 Days":
+                    daysInPeriod = 7;
+                    break;
+                case "This Month":
+                    LocalDate startOfMonth = today.withDayOfMonth(1);
+                    daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(startOfMonth, today) + 1;
+                    break;
+                case "Last 30 Days":
+                    daysInPeriod = 30;
+                    break;
+                default:
+                    if (finalPeriod.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
+                        daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(customAnalysisStartDate, customAnalysisEndDate) + 1;
+                    } else {
+                        // All Time
+                        if (rawSessions.isEmpty()) {
+                            daysInPeriod = 1;
+                        } else {
+                            LocalDate earliest = rawSessions.stream()
+                                .map(s -> s.getStartTime().toLocalDate())
+                                .min(LocalDate::compareTo)
+                                .orElse(today);
+                            daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(earliest, today) + 1;
+                        }
+                    }
+                    break;
+            }
+            if (daysInPeriod <= 0) {
+                daysInPeriod = 1;
+            }
+
+            double avgMinutes = (double) totalSeconds / (daysInPeriod * 60.0);
+            int percent = dailyGoalMinutes > 0 ? (int) Math.round((avgMinutes * 100.0) / dailyGoalMinutes) : 0;
+
+            goalProgressLabel.setText(String.format("Average: %.1f / %d mins (%d%%)", 
+                avgMinutes, dailyGoalMinutes, percent));
+
+            goalProgressBar.setValue(Math.min(100, percent));
+            if (avgMinutes >= dailyGoalMinutes) {
+                goalProgressBar.setForeground(new java.awt.Color(46, 139, 87));
+            } else {
+                goalProgressBar.setForeground(new java.awt.Color(70, 130, 180));
+            }
+
+            GoalStreakStats stats = calculateGoalStreakStats(endDate);
+            streakLabel.setText(String.format("Streak: %d days %s (Max: %d 🏆)", 
+                stats.currentStreak, stats.currentStreak > 0 ? "🔥" : "💤", stats.maxStreak));
         }
-        
-        streakLabel.setText(String.format("Streak: %d days %s (Max: %d 🏆)", 
-            stats.currentStreak, stats.currentStreak > 0 ? "🔥" : "💤", stats.maxStreak));
         
         // Subject breakdown
         subjectAnalysisModel.setRowCount(0);
@@ -1261,10 +1473,12 @@ public class AppFrame extends JFrame {
         long dppSec = 0;
         long practiceSec = 0;
         long pyqSec = 0;
+        long revisionSec = 0;
         long generalSec = 0;
-
+        java.util.Map<String, Long> byRevisionTopic = new java.util.HashMap<>();
+ 
         for (SessionRecord session : sessions) {
-            String desc = session.getDescription();
+            String desc = session.getDescription() != null ? session.getDescription() : "";
             long sec = session.getDurationSeconds();
             if (desc.startsWith("Questions: ")) {
                 String qType = desc.substring("Questions: ".length());
@@ -1277,16 +1491,29 @@ public class AppFrame extends JFrame {
                 } else {
                     generalSec += sec;
                 }
+            } else if (desc.startsWith("Revision: ")) {
+                String topic = desc.substring("Revision: ".length()).trim();
+                if (topic.isEmpty()) topic = "General/Unnamed";
+                byRevisionTopic.put(topic, byRevisionTopic.getOrDefault(topic, 0L) + sec);
+                revisionSec += sec;
             } else if (!desc.startsWith("Lecture: ")) {
                 generalSec += sec;
             }
         }
-
+ 
         activityAnalysisModel.setRowCount(0);
         activityAnalysisModel.addRow(new Object[]{"DPP Questions", formatDuration(dppSec)});
         activityAnalysisModel.addRow(new Object[]{"Practice Book Questions", formatDuration(practiceSec)});
         activityAnalysisModel.addRow(new Object[]{"Previous Year Questions", formatDuration(pyqSec)});
+        activityAnalysisModel.addRow(new Object[]{"Revision (Total)", formatDuration(revisionSec)});
         activityAnalysisModel.addRow(new Object[]{"General / Other", formatDuration(generalSec)});
+ 
+        revisionAnalysisModel.setRowCount(0);
+        java.util.List<java.util.Map.Entry<String, Long>> sortedRevisions = new java.util.ArrayList<>(byRevisionTopic.entrySet());
+        sortedRevisions.sort((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()));
+        for (java.util.Map.Entry<String, Long> entry : sortedRevisions) {
+            revisionAnalysisModel.addRow(new Object[]{entry.getKey(), formatDuration(entry.getValue())});
+        }
 
         // Day of Week breakdown (Always Last 7 Days)
         List<SessionRecord> last7DaysSessions = rawSessions.stream()
@@ -1302,8 +1529,77 @@ public class AppFrame extends JFrame {
             ));
         weeklyBarChartPanel.setData(byDay);
 
-        // Update daily timeline with today's sessions
-        dailyTimelinePanel.setData(rawSessions);
+        // Update session timeline (either single-day detailed timeline or multi-day average timeline)
+        if (isSingleDay) {
+            dailyTimelinePanel.setSingleDayData(rawSessions, singleDayTargetDate);
+        } else {
+            // Find days in period
+            long daysInPeriod = 1;
+            switch (finalPeriod) {
+                case "This Week":
+                    LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                    daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(startOfWeek, today) + 1;
+                    break;
+                case "Last 7 Days":
+                    daysInPeriod = 7;
+                    break;
+                case "This Month":
+                    LocalDate startOfMonth = today.withDayOfMonth(1);
+                    daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(startOfMonth, today) + 1;
+                    break;
+                case "Last 30 Days":
+                    daysInPeriod = 30;
+                    break;
+                default:
+                    if (finalPeriod.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
+                        daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(customAnalysisStartDate, customAnalysisEndDate) + 1;
+                    } else {
+                        // All Time
+                        if (rawSessions.isEmpty()) {
+                            daysInPeriod = 1;
+                        } else {
+                            LocalDate earliest = rawSessions.stream()
+                                .map(s -> s.getStartTime().toLocalDate())
+                                .min(LocalDate::compareTo)
+                                .orElse(today);
+                            daysInPeriod = java.time.temporal.ChronoUnit.DAYS.between(earliest, today) + 1;
+                        }
+                    }
+                    break;
+            }
+            if (daysInPeriod <= 0) {
+                daysInPeriod = 1;
+            }
+            dailyTimelinePanel.setAverageData(sessions, daysInPeriod);
+        }
+
+        if (timelineBorder != null) {
+            if (isSingleDay) {
+                String titleDateStr = "Today";
+                if (finalPeriod.equals("Yesterday")) {
+                    titleDateStr = "Yesterday";
+                } else if (finalPeriod.startsWith("Custom: ")) {
+                    titleDateStr = singleDayTargetDate.toString();
+                }
+
+                if (titleDateStr.equals("Today")) {
+                    timelineBorder.setTitle("Today's Session Timeline");
+                } else if (titleDateStr.equals("Yesterday")) {
+                    timelineBorder.setTitle("Yesterday's Session Timeline");
+                } else {
+                    timelineBorder.setTitle("Session Timeline (" + titleDateStr + ")");
+                }
+            } else {
+                String rangeLabel = finalPeriod;
+                if (finalPeriod.startsWith("Custom: ")) {
+                    rangeLabel = finalPeriod.substring("Custom: ".length());
+                }
+                timelineBorder.setTitle("Average Session Timeline (" + rangeLabel + ")");
+            }
+            if (dailyTimelinePanel.getParent() != null) {
+                dailyTimelinePanel.getParent().repaint();
+            }
+        }
 
         // Heatmap update (always last 365 days)
         LocalDate heatmapStart = today.minusDays(365);
@@ -1413,6 +1709,9 @@ public class AppFrame extends JFrame {
             String ch = stopwatchChapterField.getText().trim();
             String lec = stopwatchLectureField.getText().trim();
             activityDetail = "Lecture: Ch " + ch + ", Lec " + lec;
+        } else if ("Revision".equals(activityType)) {
+            String topic = stopwatchRevisionTopicField.getText().trim();
+            activityDetail = "Revision: " + topic;
         }
 
         if (resumedSession != null && resumedSession.getType() == SessionRecord.SessionType.STOPWATCH) {
@@ -1489,6 +1788,7 @@ public class AppFrame extends JFrame {
         stopwatchChapterField.setText("");
         stopwatchLectureField.setText("");
         stopwatchQuestionDescField.setText("");
+        stopwatchRevisionTopicField.setText("");
         stopwatchActivityTypeCombo.setSelectedIndex(0);
         stopwatchQuestionTypeCombo.setSelectedIndex(0);
         updateStopwatchButtons();
@@ -1532,6 +1832,7 @@ public class AppFrame extends JFrame {
         stopwatchQuestionDescField.setEnabled(!stopwatchStarted);
         stopwatchChapterField.setEnabled(!stopwatchStarted);
         stopwatchLectureField.setEnabled(!stopwatchStarted);
+        stopwatchRevisionTopicField.setEnabled(!stopwatchStarted);
         if (miniWindow != null) {
             miniWindow.updateState();
         }
@@ -2399,11 +2700,14 @@ public class AppFrame extends JFrame {
     }
 
     public GoalStreakStats calculateGoalStreakStats() {
+        return calculateGoalStreakStats(LocalDate.now());
+    }
+
+    public GoalStreakStats calculateGoalStreakStats(LocalDate upToDate) {
         GoalStreakStats stats = new GoalStreakStats();
         stats.dailyGoalMinutes = storageService.loadDailyGoalMinutes();
         
         List<SessionRecord> sessions = storageService.loadSessions();
-        LocalDate today = LocalDate.now();
         
         // Group seconds by date
         java.util.Map<LocalDate, Long> secondsPerDay = new java.util.HashMap<>();
@@ -2413,7 +2717,7 @@ public class AppFrame extends JFrame {
             secondsPerDay.put(date, secondsPerDay.getOrDefault(date, 0L) + sec);
         }
         
-        stats.todayMinutes = (int) (secondsPerDay.getOrDefault(today, 0L) / 60);
+        stats.todayMinutes = (int) (secondsPerDay.getOrDefault(upToDate, 0L) / 60);
         stats.todayGoalMet = stats.todayMinutes >= stats.dailyGoalMinutes;
         
         // Helper to check if goal was met on a date
@@ -2424,14 +2728,14 @@ public class AppFrame extends JFrame {
         
         // 1. Calculate Current Streak
         int currentStreak = 0;
-        if (metGoal.test(today)) {
-            LocalDate d = today;
+        if (metGoal.test(upToDate)) {
+            LocalDate d = upToDate;
             while (metGoal.test(d)) {
                 currentStreak++;
                 d = d.minusDays(1);
             }
-        } else if (metGoal.test(today.minusDays(1))) {
-            LocalDate d = today.minusDays(1);
+        } else if (metGoal.test(upToDate.minusDays(1))) {
+            LocalDate d = upToDate.minusDays(1);
             while (metGoal.test(d)) {
                 currentStreak++;
                 d = d.minusDays(1);
@@ -2448,12 +2752,12 @@ public class AppFrame extends JFrame {
         LocalDate earliest = sessions.stream()
             .map(s -> s.getStartTime().toLocalDate())
             .min(LocalDate::compareTo)
-            .orElse(today);
+            .orElse(upToDate);
             
         int maxStreak = 0;
         int running = 0;
         LocalDate d = earliest;
-        while (!d.isAfter(today)) {
+        while (!d.isAfter(upToDate)) {
             if (metGoal.test(d)) {
                 running++;
                 maxStreak = Math.max(maxStreak, running);
@@ -3280,7 +3584,10 @@ public class AppFrame extends JFrame {
     }
 
     private static class DailyTimelinePanel extends JPanel {
-        private List<SessionRecord> todaySessions = new ArrayList<>();
+        private List<SessionRecord> sessions = new ArrayList<>();
+        private boolean isAverageMode = false;
+        private long daysInPeriod = 1;
+        private LocalDate targetDate;
 
         public DailyTimelinePanel() {
             setOpaque(false);
@@ -3288,67 +3595,116 @@ public class AppFrame extends JFrame {
             setToolTipText("");
         }
 
-        public void setData(List<SessionRecord> allSessions) {
-            LocalDate today = LocalDate.now();
-            this.todaySessions = allSessions.stream()
-                .filter(s -> s.getStartTime().toLocalDate().equals(today))
+        public void setSingleDayData(List<SessionRecord> allSessions, LocalDate targetDate) {
+            this.isAverageMode = false;
+            this.daysInPeriod = 1;
+            this.targetDate = targetDate;
+            this.sessions = allSessions.stream()
+                .filter(s -> s.getStartTime().toLocalDate().equals(targetDate))
                 .sorted(java.util.Comparator.comparing(SessionRecord::getStartTime))
                 .collect(Collectors.toList());
             repaint();
         }
 
+        public void setAverageData(List<SessionRecord> filteredSessions, long daysInPeriod) {
+            this.isAverageMode = true;
+            this.daysInPeriod = Math.max(1, daysInPeriod);
+            this.targetDate = null;
+            this.sessions = new ArrayList<>(filteredSessions);
+            repaint();
+        }
+
+        private int countDaysActiveAt(int minuteOfDay) {
+            java.util.Set<LocalDate> activeDates = new java.util.HashSet<>();
+            for (SessionRecord s : sessions) {
+                LocalDate date = s.getStartTime().toLocalDate();
+                int startMin = s.getStartTime().toLocalTime().toSecondOfDay() / 60;
+                int endMin = s.getEndTime().toLocalTime().toSecondOfDay() / 60;
+                
+                if (endMin < startMin) { // Spans midnight
+                    if (minuteOfDay >= startMin || minuteOfDay <= endMin) {
+                        activeDates.add(date);
+                    }
+                } else {
+                    if (minuteOfDay >= startMin && minuteOfDay <= endMin) {
+                        activeDates.add(date);
+                    }
+                }
+            }
+            return activeDates.size();
+        }
+
         @Override
         public String getToolTipText(MouseEvent e) {
-            if (todaySessions.isEmpty()) return "No sessions tracked today.";
+            if (sessions.isEmpty()) {
+                return isAverageMode ? "No study sessions logged in this period." : "No sessions tracked on this day.";
+            }
 
             int w = getWidth();
             int paddingLeft = 20;
             int paddingRight = 20;
             int chartW = w - paddingLeft - paddingRight;
 
-            LocalDateTime firstStart = todaySessions.get(0).getStartTime();
-            LocalDateTime lastEnd = todaySessions.get(todaySessions.size() - 1).getEndTime();
-            
-            LocalDateTime timelineStart = firstStart.minusMinutes(30);
-            LocalDateTime timelineEnd = lastEnd.plusMinutes(30);
-
-            long totalTimelineSec = java.time.Duration.between(timelineStart, timelineEnd).toSeconds();
-            if (totalTimelineSec <= 0) return null;
-
             int mouseX = e.getX();
             if (mouseX < paddingLeft || mouseX > w - paddingRight) return null;
 
-            double ratio = (double) (mouseX - paddingLeft) / chartW;
-            long offsetSeconds = (long) (ratio * totalTimelineSec);
-            LocalDateTime hoverTime = timelineStart.plusSeconds(offsetSeconds);
+            if (isAverageMode) {
+                double ratio = (double) (mouseX - paddingLeft) / chartW;
+                int totalMinutes = 24 * 60;
+                int minuteOfDay = (int) (ratio * totalMinutes);
+                if (minuteOfDay < 0) minuteOfDay = 0;
+                if (minuteOfDay >= totalMinutes) minuteOfDay = totalMinutes - 1;
 
-            for (SessionRecord s : todaySessions) {
-                if (!hoverTime.isBefore(s.getStartTime()) && !hoverTime.isAfter(s.getEndTime())) {
-                    long activeSec = s.getDurationSeconds();
-                    long spanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
-                    long breakSec = Math.max(0, spanSec - activeSec);
-                    double efficiency = spanSec > 0 ? ((double) activeSec / spanSec) * 100.0 : 100.0;
+                int hour = minuteOfDay / 60;
+                int minute = minuteOfDay % 60;
+                String timeStr = String.format("%02d:%02d", hour, minute);
 
-                    String activeStr = String.format("%d min", activeSec / 60);
-                    if (activeSec >= 3600) {
-                        activeStr = (activeSec / 3600) + "h " + ((activeSec % 3600) / 60) + "m";
+                int activeDays = countDaysActiveAt(minuteOfDay);
+                double percentage = (double) activeDays * 100.0 / daysInPeriod;
+                return String.format("<html><b>Time of Day:</b> %s<br><b>Study Frequency:</b> %.1f%% (%d / %d days)</html>",
+                    timeStr, percentage, activeDays, daysInPeriod);
+            } else {
+                LocalDateTime firstStart = sessions.get(0).getStartTime();
+                LocalDateTime lastEnd = sessions.get(sessions.size() - 1).getEndTime();
+                
+                LocalDateTime timelineStart = firstStart.minusMinutes(30);
+                LocalDateTime timelineEnd = lastEnd.plusMinutes(30);
+
+                long totalTimelineSec = java.time.Duration.between(timelineStart, timelineEnd).toSeconds();
+                if (totalTimelineSec <= 0) return null;
+
+                double ratio = (double) (mouseX - paddingLeft) / chartW;
+                long offsetSeconds = (long) (ratio * totalTimelineSec);
+                LocalDateTime hoverTime = timelineStart.plusSeconds(offsetSeconds);
+
+                for (SessionRecord s : sessions) {
+                    if (!hoverTime.isBefore(s.getStartTime()) && !hoverTime.isAfter(s.getEndTime())) {
+                        long activeSec = s.getDurationSeconds();
+                        long spanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+                        long breakSec = Math.max(0, spanSec - activeSec);
+                        double efficiency = spanSec > 0 ? ((double) activeSec / spanSec) * 100.0 : 100.0;
+
+                        String activeStr = String.format("%d min", activeSec / 60);
+                        if (activeSec >= 3600) {
+                            activeStr = (activeSec / 3600) + "h " + ((activeSec % 3600) / 60) + "m";
+                        }
+
+                        String breakStr = "";
+                        if (breakSec > 0) {
+                            breakStr = String.format("<br>Mid-Session Breaks: %d min (Efficiency: %.1f%%)", breakSec / 60, efficiency);
+                        }
+
+                        return "<html><b>Subject:</b> " + s.getSubject() +
+                               "<br><b>Activity:</b> " + s.getDescription() +
+                               "<br><b>Time:</b> " + s.getStartTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + 
+                               " - " + s.getEndTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) +
+                               "<br><b>Active Duration:</b> " + activeStr +
+                               breakStr + "</html>";
                     }
-
-                    String breakStr = "";
-                    if (breakSec > 0) {
-                        breakStr = String.format("<br>Mid-Session Breaks: %d min (Efficiency: %.1f%%)", breakSec / 60, efficiency);
-                    }
-
-                    return "<html><b>Subject:</b> " + s.getSubject() +
-                           "<br><b>Activity:</b> " + s.getDescription() +
-                           "<br><b>Time:</b> " + s.getStartTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + 
-                           " - " + s.getEndTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) +
-                           "<br><b>Active Duration:</b> " + activeStr +
-                           breakStr + "</html>";
                 }
-            }
 
-            return "Idle/Break between sessions";
+                return "Idle/Break between sessions";
+            }
         }
 
         @Override
@@ -3373,70 +3729,140 @@ public class AppFrame extends JFrame {
             g2.setColor(colors.border);
             g2.fillRoundRect(paddingLeft, barY, chartW, barH, 6, 6);
 
-            if (todaySessions.isEmpty()) {
+            if (sessions.isEmpty()) {
                 g2.setColor(colors.text);
                 g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
                 FontMetrics fm = g2.getFontMetrics();
-                String msg = "No study sessions logged today yet.";
+                String msg = isAverageMode ? "No study sessions logged in this period." : "No study sessions logged on this day.";
                 g2.drawString(msg, (w - fm.stringWidth(msg)) / 2, barY + barH / 2 + 5);
                 g2.dispose();
                 return;
             }
 
-            LocalDateTime firstStart = todaySessions.get(0).getStartTime();
-            LocalDateTime lastEnd = todaySessions.get(todaySessions.size() - 1).getEndTime();
-            
-            LocalDateTime timelineStart = firstStart.minusMinutes(30);
-            LocalDateTime timelineEnd = lastEnd.plusMinutes(30);
-
-            long totalTimelineSec = java.time.Duration.between(timelineStart, timelineEnd).toSeconds();
-            if (totalTimelineSec <= 0) totalTimelineSec = 1;
-
-            for (SessionRecord s : todaySessions) {
-                long offsetStartSec = java.time.Duration.between(timelineStart, s.getStartTime()).toSeconds();
-                long sessionSpanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
-
-                int x = paddingLeft + (int) (((double) offsetStartSec / totalTimelineSec) * chartW);
-                int sessionW = (int) (((double) sessionSpanSec / totalTimelineSec) * chartW);
-                if (sessionW < 4) sessionW = 4;
-
-                g2.setColor(colors.accent);
-                g2.fillRoundRect(x, barY, sessionW, barH, 4, 4);
-
-                long activeSec = s.getDurationSeconds();
-                long midSessionBreakSec = Math.max(0, sessionSpanSec - activeSec);
-                if (midSessionBreakSec > 0 && sessionW > 10) {
-                    double ratio = (double) midSessionBreakSec / sessionSpanSec;
-                    int breakW = (int) (sessionW * ratio);
-                    int breakX = x + sessionW - breakW;
-                    g2.setColor(new Color(128, 128, 128, 180));
-                    g2.fillRoundRect(breakX, barY + 2, breakW, barH - 4, 3, 3);
+            if (isAverageMode) {
+                // 1. Draw Density Heatmap
+                int[] minuteCounts = new int[1440];
+                java.util.Map<Integer, java.util.Set<LocalDate>> activeDatesPerMinute = new java.util.HashMap<>();
+                for (int m = 0; m < 1440; m++) {
+                    activeDatesPerMinute.put(m, new java.util.HashSet<>());
                 }
-            }
+                for (SessionRecord s : sessions) {
+                    LocalDate date = s.getStartTime().toLocalDate();
+                    int startMin = s.getStartTime().toLocalTime().toSecondOfDay() / 60;
+                    int endMin = s.getEndTime().toLocalTime().toSecondOfDay() / 60;
 
-            g2.setColor(colors.text);
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
-            FontMetrics fm = g2.getFontMetrics();
+                    if (endMin < startMin) { // Spans midnight
+                        for (int m = startMin; m < 1440; m++) {
+                            activeDatesPerMinute.get(m).add(date);
+                        }
+                        for (int m = 0; m <= endMin; m++) {
+                            activeDatesPerMinute.get(m).add(date);
+                        }
+                    } else {
+                        for (int m = startMin; m <= endMin; m++) {
+                            activeDatesPerMinute.get(m).add(date);
+                        }
+                    }
+                }
+                for (int m = 0; m < 1440; m++) {
+                    minuteCounts[m] = activeDatesPerMinute.get(m).size();
+                }
 
-            long hoursSpan = totalTimelineSec / 3600;
-            int tickIntervalHours = hoursSpan > 12 ? 3 : (hoursSpan > 6 ? 2 : 1);
+                g2.setClip(new java.awt.geom.RoundRectangle2D.Float(paddingLeft, barY, chartW, barH, 6, 6));
+                java.awt.Color accent = colors.accent;
+                for (int x = paddingLeft; x < w - paddingRight; x++) {
+                    double ratio = (double) (x - paddingLeft) / chartW;
+                    int minuteOfDay = (int) (ratio * 1440);
+                    if (minuteOfDay < 0) minuteOfDay = 0;
+                    if (minuteOfDay >= 1440) minuteOfDay = 1439;
 
-            LocalDateTime tickTime = timelineStart.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusHours(1);
-            while (tickTime.isBefore(timelineEnd)) {
-                long offsetSec = java.time.Duration.between(timelineStart, tickTime).toSeconds();
-                int tickX = paddingLeft + (int) (((double) offsetSec / totalTimelineSec) * chartW);
+                    int count = minuteCounts[minuteOfDay];
+                    if (count > 0) {
+                        double prob = (double) count / daysInPeriod;
+                        int alpha = (int) (prob * 255.0);
+                        if (alpha > 255) alpha = 255;
+                        if (alpha < 0) alpha = 0;
+                        g2.setColor(new java.awt.Color(accent.getRed(), accent.getGreen(), accent.getBlue(), alpha));
+                        g2.drawLine(x, barY, x, barY + barH);
+                    }
+                }
+                g2.setClip(null);
 
-                if (tickX >= paddingLeft && tickX <= w - paddingRight) {
+                // 2. Draw Ticks for full 24-hour day
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                g2.setColor(colors.text);
+                FontMetrics fm = g2.getFontMetrics();
+
+                for (int hTick = 3; hTick <= 21; hTick += 3) {
+                    double ratio = (double) hTick / 24.0;
+                    int tickX = paddingLeft + (int) (ratio * chartW);
+
                     g2.setColor(colors.border);
                     g2.drawLine(tickX, barY + barH, tickX, barY + barH + 4);
 
                     g2.setColor(colors.text);
-                    String timeLabel = tickTime.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-                    int lblX = tickX - fm.stringWidth(timeLabel) / 2;
-                    int lblY = barY + barH + 16;
-                    g2.drawString(timeLabel, lblX, lblY);
+                    String tickLabel = String.format("%02d:00", hTick);
+                    int lblW = fm.stringWidth(tickLabel);
+                    g2.drawString(tickLabel, tickX - lblW / 2, barY + barH + 16);
                 }
-                tickTime = tickTime.plusHours(tickIntervalHours);
+            } else {
+                LocalDateTime firstStart = sessions.get(0).getStartTime();
+                LocalDateTime lastEnd = sessions.get(sessions.size() - 1).getEndTime();
+                
+                LocalDateTime timelineStart = firstStart.minusMinutes(30);
+                LocalDateTime timelineEnd = lastEnd.plusMinutes(30);
+
+                long totalTimelineSec = java.time.Duration.between(timelineStart, timelineEnd).toSeconds();
+                if (totalTimelineSec <= 0) totalTimelineSec = 1;
+
+                g2.setClip(new java.awt.geom.RoundRectangle2D.Float(paddingLeft, barY, chartW, barH, 6, 6));
+                for (SessionRecord s : sessions) {
+                    long offsetStartSec = java.time.Duration.between(timelineStart, s.getStartTime()).toSeconds();
+                    long sessionSpanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+
+                    int x = paddingLeft + (int) (((double) offsetStartSec / totalTimelineSec) * chartW);
+                    int sessionW = (int) (((double) sessionSpanSec / totalTimelineSec) * chartW);
+                    if (sessionW < 4) sessionW = 4;
+
+                    g2.setColor(colors.accent);
+                    g2.fillRoundRect(x, barY, sessionW, barH, 4, 4);
+
+                    long activeSec = s.getDurationSeconds();
+                    long midSessionBreakSec = Math.max(0, sessionSpanSec - activeSec);
+                    if (midSessionBreakSec > 0 && sessionW > 10) {
+                        double ratio = (double) midSessionBreakSec / sessionSpanSec;
+                        int breakW = (int) (sessionW * ratio);
+                        int breakX = x + sessionW - breakW;
+                        g2.setColor(new Color(128, 128, 128, 180));
+                        g2.fillRoundRect(breakX, barY + 2, breakW, barH - 4, 3, 3);
+                    }
+                }
+                g2.setClip(null);
+
+                g2.setColor(colors.text);
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                FontMetrics fm = g2.getFontMetrics();
+
+                long hoursSpan = totalTimelineSec / 3600;
+                int tickIntervalHours = hoursSpan > 12 ? 3 : (hoursSpan > 6 ? 2 : 1);
+
+                LocalDateTime tickTime = timelineStart.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusHours(1);
+                while (tickTime.isBefore(timelineEnd)) {
+                    long offsetSec = java.time.Duration.between(timelineStart, tickTime).toSeconds();
+                    int tickX = paddingLeft + (int) (((double) offsetSec / totalTimelineSec) * chartW);
+
+                    if (tickX >= paddingLeft && tickX <= w - paddingRight) {
+                        g2.setColor(colors.border);
+                        g2.drawLine(tickX, barY + barH, tickX, barY + barH + 4);
+
+                        g2.setColor(colors.text);
+                        String timeLabel = tickTime.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+                        int lblX = tickX - fm.stringWidth(timeLabel) / 2;
+                        int lblY = barY + barH + 16;
+                        g2.drawString(timeLabel, lblX, lblY);
+                    }
+                    tickTime = tickTime.plusHours(tickIntervalHours);
+                }
             }
             g2.dispose();
         }

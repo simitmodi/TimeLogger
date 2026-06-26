@@ -43,14 +43,27 @@ if (Test-Path $pngPath) {
     }
 }
 
-# 2. Create the shortcut in the project folder
+# 2. Determine target path and arguments based on standalone native launcher availability
+$nativeLauncherPath = Join-Path $root "dist\TimeLogger\TimeLogger.exe"
+$targetPath = "javaw.exe"
+$arguments = "-Xms4m -Xmx24m -XX:+UseSerialGC -XX:MinHeapFreeRatio=5 -XX:MaxHeapFreeRatio=10 -XX:CICompilerCount=1 -XX:TieredStopAtLevel=1 -Xss256k -XX:ReservedCodeCacheSize=12m -XX:MaxMetaspaceSize=20m -Dsun.java2d.d3d=false -Dsun.java2d.noddraw=true -Dsun.java2d.opengl=false -Dsun.zip.disableMemoryMapping=true -jar `"$jarPath`""
+$workingDirectory = $root
+
+if (Test-Path $nativeLauncherPath) {
+    Write-Host "Found standalone native launcher at dist\TimeLogger\TimeLogger.exe. Targeting native executable..."
+    $targetPath = $nativeLauncherPath
+    $arguments = ""
+    $workingDirectory = Join-Path $root "dist\TimeLogger"
+}
+
+# 3. Create the shortcut in the project folder
 $shortcutPath = Join-Path $root "Time Logger.lnk"
 
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-$Shortcut.TargetPath = "javaw.exe"
-$Shortcut.Arguments = "-Xms4m -Xmx24m -XX:+UseSerialGC -XX:MinHeapFreeRatio=5 -XX:MaxHeapFreeRatio=10 -XX:CICompilerCount=1 -XX:TieredStopAtLevel=1 -Xss256k -XX:ReservedCodeCacheSize=12m -XX:MaxMetaspaceSize=20m -Dsun.java2d.d3d=false -Dsun.java2d.noddraw=true -Dsun.java2d.opengl=false -Dsun.zip.disableMemoryMapping=true -jar `"$jarPath`""
-$Shortcut.WorkingDirectory = $root
+$Shortcut.TargetPath = $targetPath
+$Shortcut.Arguments = $arguments
+$Shortcut.WorkingDirectory = $workingDirectory
 $Shortcut.Description = "Time Logger Desktop Application"
 
 # Apply the custom generated icon
