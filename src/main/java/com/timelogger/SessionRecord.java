@@ -18,16 +18,21 @@ public class SessionRecord {
     private final long durationSeconds;
     private final String description;
     private final int pauseCount;
+    private final int questionsSolved;
 
     public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds) {
-        this(type, subject, startTime, endTime, durationSeconds, "", 0);
+        this(type, subject, startTime, endTime, durationSeconds, "", 0, 0);
     }
 
     public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds, String description) {
-        this(type, subject, startTime, endTime, durationSeconds, description, 0);
+        this(type, subject, startTime, endTime, durationSeconds, description, 0, 0);
     }
 
     public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds, String description, int pauseCount) {
+        this(type, subject, startTime, endTime, durationSeconds, description, pauseCount, 0);
+    }
+
+    public SessionRecord(SessionType type, String subject, LocalDateTime startTime, LocalDateTime endTime, long durationSeconds, String description, int pauseCount, int questionsSolved) {
         this.type = type;
         this.subject = subject;
         this.startTime = startTime;
@@ -35,6 +40,7 @@ public class SessionRecord {
         this.durationSeconds = durationSeconds;
         this.description = description;
         this.pauseCount = pauseCount;
+        this.questionsSolved = questionsSolved;
     }
 
     public SessionType getType() {
@@ -65,6 +71,10 @@ public class SessionRecord {
         return pauseCount;
     }
 
+    public int getQuestionsSolved() {
+        return questionsSolved;
+    }
+
     public String toStorageLine() {
         return String.join("|",
             type.name(),
@@ -73,7 +83,8 @@ public class SessionRecord {
             endTime.format(DATE_FORMAT),
             String.valueOf(durationSeconds),
             sanitize(description),
-            String.valueOf(pauseCount)
+            String.valueOf(pauseCount),
+            String.valueOf(questionsSolved)
         );
     }
 
@@ -95,8 +106,14 @@ public class SessionRecord {
                 pauseCount = Integer.parseInt(parts[6]);
             } catch (NumberFormatException ignored) {}
         }
+        int questionsSolved = 0;
+        if (parts.length > 7 && !parts[7].isEmpty()) {
+            try {
+                questionsSolved = Integer.parseInt(parts[7]);
+            } catch (NumberFormatException ignored) {}
+        }
 
-        return new SessionRecord(type, subject, start, end, duration, description, pauseCount);
+        return new SessionRecord(type, subject, start, end, duration, description, pauseCount, questionsSolved);
     }
 
     private static String sanitize(String value) {

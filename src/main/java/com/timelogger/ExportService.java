@@ -40,7 +40,7 @@ public class ExportService {
         int rowIndex = 1;
 
         appendHeaderRow(rows, rowIndex++, List.of(
-            "Type", "Subject", "Activity", "Start Time", "End Time", "Duration (sec)", "Duration (hh:mm:ss)"
+            "Type", "Subject", "Activity", "Start Time", "End Time", "Duration (sec)", "Duration (hh:mm:ss)", "Questions Solved", "Avg Time/Q"
         ));
 
         List<SessionRecord> sorted = sessions.stream()
@@ -48,6 +48,8 @@ public class ExportService {
             .collect(Collectors.toList());
 
         for (SessionRecord session : sorted) {
+            double avgTimeSec = session.getQuestionsSolved() > 0 ? (double) session.getDurationSeconds() / session.getQuestionsSolved() : 0;
+            String avgTimeStr = session.getQuestionsSolved() > 0 ? formatAvgQTime(avgTimeSec) : "-";
             rows.append("<row r=\"").append(rowIndex).append("\">")
                 .append(textCell(1, rowIndex, session.getType().name(), false))
                 .append(textCell(2, rowIndex, session.getSubject(), false))
@@ -56,6 +58,8 @@ public class ExportService {
                 .append(textCell(5, rowIndex, session.getEndTime().format(DATE_TIME_FORMAT), false))
                 .append(numberCell(6, rowIndex, session.getDurationSeconds(), false))
                 .append(textCell(7, rowIndex, formatDuration(session.getDurationSeconds()), false))
+                .append(numberCell(8, rowIndex, session.getQuestionsSolved(), false))
+                .append(textCell(9, rowIndex, avgTimeStr, false))
                 .append("</row>");
             rowIndex++;
         }
@@ -230,5 +234,21 @@ public class ExportService {
         long minutes = (totalSeconds % 3600) / 60;
         long seconds = totalSeconds % 60;
         return String.format("%02d:%02d:%02d", hours, minutes, seconds);
+    }
+
+    private String formatAvgQTime(double avgSec) {
+        if (avgSec >= 60) {
+            long mins = (long) avgSec / 60;
+            long secs = (long) Math.round(avgSec % 60);
+            if (secs == 60) {
+                mins++;
+                secs = 0;
+            }
+            return mins + "m:" + secs + "s/q";
+        } else if (avgSec >= 1.0) {
+            return Math.round(avgSec) + "s/q";
+        } else {
+            return String.format("%.1fs/q", avgSec);
+        }
     }
 }

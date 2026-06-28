@@ -120,7 +120,6 @@ public class AppFrame extends JFrame {
     private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause");
     private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log");
     private final ModernButton stopwatchResetButton = new ModernButton("Reset");
-    private final ModernButton stopwatchMiniButton = new ModernButton("Mini Mode");
 
     private boolean stopwatchRunning = false;
     private boolean stopwatchStarted = false;
@@ -139,7 +138,6 @@ public class AppFrame extends JFrame {
     private final ModernButton timerPauseResumeButton = new ModernButton("Pause");
     private final ModernButton timerStopButton = new ModernButton("Stop");
     private final ModernButton timerResetButton = new ModernButton("Reset");
-    private final ModernButton timerMiniButton = new ModernButton("Mini Mode");
 
     private boolean timerRunning = false;
     private boolean timerStarted = false;
@@ -148,7 +146,7 @@ public class AppFrame extends JFrame {
     private LocalDateTime timerSessionStart;
     private final Timer timerTick;
 
-    private MiniWindow miniWindow = null;
+    // MiniWindow reference removed (mini mode discarded)
     private JTabbedPane tabs;
     private SessionRecord resumedSession = null;
     private String previousAnalysisPeriod = "All Time";
@@ -184,13 +182,19 @@ public class AppFrame extends JFrame {
             return false;
         }
     };
-    final DefaultTableModel activityAnalysisModel = new DefaultTableModel(new Object[]{"Activity", "Duration"}, 0) {
+    final DefaultTableModel activityAnalysisModel = new DefaultTableModel(new Object[]{"Activity", "Duration", "Questions Solved", "Avg Time/Q"}, 0) {
         @Override
         public boolean isCellEditable(int row, int col) {
             return false;
         }
     };
     final DefaultTableModel revisionAnalysisModel = new DefaultTableModel(new Object[]{"Topic", "Duration"}, 0) {
+        @Override
+        public boolean isCellEditable(int row, int col) {
+            return false;
+        }
+    };
+    final DefaultTableModel questionsByTopicAnalysisModel = new DefaultTableModel(new Object[]{"Topic", "Duration", "Questions Solved", "Avg Time/Q"}, 0) {
         @Override
         public boolean isCellEditable(int row, int col) {
             return false;
@@ -281,19 +285,22 @@ public class AppFrame extends JFrame {
 
         initSystemTray();
 
+        // Register shutdown hook to cleanly remove tray icon on VM shutdown
+        Runtime.getRuntime().addShutdownHook(new Thread(this::cleanupSystemTray));
+
         this.tabs.addChangeListener(e -> {
-            if (tabs.getSelectedIndex() == tabs.indexOfTab("Insights")) {
+            int selectedIdx = tabs.getSelectedIndex();
+            if (selectedIdx == tabs.indexOfTab("Insights")) {
                 refreshInsights();
+            } else if (selectedIdx == tabs.indexOfTab("AI Assistant")) {
+                showChatInterface();
             }
         });
 
-        // Minimize memory footprint and hide to system tray when minimized
+        // Minimize memory footprint when minimized (normal taskbar behavior, no hide)
         this.addWindowStateListener(e -> {
             if ((e.getNewState() & JFrame.ICONIFIED) == JFrame.ICONIFIED) {
                 System.gc();
-                if (SystemTray.isSupported() && trayIconAdded) {
-                    setVisible(false);
-                }
             }
         });
 
@@ -301,6 +308,14 @@ public class AppFrame extends JFrame {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
                 updateTimeLabelsFontSize();
+            }
+        });
+
+        this.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                saveChatHistory();
+                cleanupSystemTray();
             }
         });
     }
@@ -315,13 +330,13 @@ public class AppFrame extends JFrame {
                 child.setFont(controlFont);
                 int width = 150;
                 if (child == stopwatchActivityField || child == stopwatchQuestionDescField || child == stopwatchRevisionTopicField) {
-                    width = Math.max(300, getWidth() / 4);
+                    width = Math.max(150, getWidth() / 4);
                 } else if (child == stopwatchQuestionTypeCombo) {
-                    width = Math.max(200, getWidth() / 6);
+                    width = Math.max(200, child.getPreferredSize().width + 40);
                 } else if (child == stopwatchChapterField || child == stopwatchLectureField) {
-                    width = Math.max(50, getWidth() / 20);
+                    width = Math.max(40, getWidth() / 20);
                 } else if (child == stopwatchSubjectCombo || child == stopwatchActivityTypeCombo || child == timerSubjectCombo) {
-                    width = child.getPreferredSize().width;
+                    width = child.getPreferredSize().width + 40;
                 }
                 
                 Dimension d = child.getPreferredSize();
@@ -425,12 +440,22 @@ public class AppFrame extends JFrame {
         stopwatchRevisionTopicField.setPreferredSize(new Dimension(300, 28));
 
         JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
-        stopwatchConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        stopwatchConfigPanel = new JPanel(new GridBagLayout());
         JPanel config = stopwatchConfigPanel;
-        config.add(new JLabel("Subject"));
-        config.add(stopwatchSubjectCombo);
-        config.add(new JLabel("Activity Type"));
-        config.add(stopwatchActivityTypeCombo);
+        GridBagConstraints gbcConfig = new GridBagConstraints();
+        gbcConfig.gridx = 0;
+        gbcConfig.gridy = 0;
+        gbcConfig.insets = new Insets(4, 12, 4, 12);
+        gbcConfig.fill = GridBagConstraints.NONE;
+        gbcConfig.anchor = GridBagConstraints.CENTER;
+
+        JPanel row0 = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
+        row0.setOpaque(false);
+        row0.add(new JLabel("Subject"));
+        row0.add(stopwatchSubjectCombo);
+        row0.add(new JLabel("Activity Type"));
+        row0.add(stopwatchActivityTypeCombo);
+        config.add(row0, gbcConfig);
 
         JPanel generalCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         generalCard.add(new JLabel("Desc: "));
@@ -522,7 +547,13 @@ public class AppFrame extends JFrame {
             config.repaint();
         });
 
-        config.add(stopwatchActivitySubPanel);
+        GridBagConstraints gbcSub = new GridBagConstraints();
+        gbcSub.gridx = 0;
+        gbcSub.gridy = 1;
+        gbcSub.insets = new Insets(4, 12, 4, 12);
+        gbcSub.fill = GridBagConstraints.NONE;
+        gbcSub.anchor = GridBagConstraints.CENTER;
+        config.add(stopwatchActivitySubPanel, gbcSub);
 
         centerPanel.add(stopwatchSubjectLabel, BorderLayout.NORTH);
         centerPanel.add(stopwatchTimeLabel, BorderLayout.CENTER);
@@ -532,41 +563,16 @@ public class AppFrame extends JFrame {
         stopwatchPauseResumeButton.addActionListener(e -> togglePauseStopwatch());
         stopwatchStopButton.addActionListener(e -> stopAndLogStopwatch());
         stopwatchResetButton.addActionListener(e -> resetStopwatch());
-        stopwatchMiniButton.addActionListener(e -> {
-            if (subjects.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Add at least one subject in the Subjects tab first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            String selectedSubject = (String) stopwatchSubjectCombo.getSelectedItem();
-            if (selectedSubject == null || selectedSubject.trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this,
-                    "Select a subject from the list before entering Mini Mode.",
-                    "No Subject Selected",
-                    JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            if (!stopwatchStarted) {
-                stopwatchSubject = selectedSubject;
-                stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
-                stopwatchSessionStart = LocalDateTime.now();
-                stopwatchElapsedMillis = 0;
-                stopwatchStarted = true;
-                updateStopwatchButtons();
-            }
-            openMiniWindow(SessionRecord.SessionType.STOPWATCH);
-        });
 
         stopwatchStartButton.setMnemonic('S');
         stopwatchPauseResumeButton.setMnemonic('P');
         stopwatchStopButton.setMnemonic('L');
         stopwatchResetButton.setMnemonic('R');
-        stopwatchMiniButton.setMnemonic('M');
 
         controls.add(stopwatchStartButton);
         controls.add(stopwatchPauseResumeButton);
         controls.add(stopwatchStopButton);
         controls.add(stopwatchResetButton);
-        controls.add(stopwatchMiniButton);
 
         panel.add(config, BorderLayout.NORTH);
         panel.add(centerPanel, BorderLayout.CENTER);
@@ -596,37 +602,16 @@ public class AppFrame extends JFrame {
         timerPauseResumeButton.addActionListener(e -> togglePauseTimer());
         timerStopButton.addActionListener(e -> stopTimer());
         timerResetButton.addActionListener(e -> resetTimer());
-        timerMiniButton.addActionListener(e -> {
-            if (!timerStarted) {
-                long h = (Integer) hoursSpinner.getValue();
-                long m = (Integer) minutesSpinner.getValue();
-                long s = (Integer) secondsSpinner.getValue();
-                timerTotalSeconds = h * 3600 + m * 60 + s;
-                timerRemainingSeconds = timerTotalSeconds;
-
-                if (timerTotalSeconds <= 0) {
-                    JOptionPane.showMessageDialog(this, "Set a time greater than 00:00:00 before entering Mini Mode.", "Invalid Time", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-
-                timerSessionStart = LocalDateTime.now();
-                timerStarted = true;
-                updateTimerButtons();
-            }
-            openMiniWindow(SessionRecord.SessionType.TIMER);
-        });
 
         timerStartButton.setMnemonic('S');
         timerPauseResumeButton.setMnemonic('P');
         timerStopButton.setMnemonic('T');
         timerResetButton.setMnemonic('R');
-        timerMiniButton.setMnemonic('M');
 
         controls.add(timerStartButton);
         controls.add(timerPauseResumeButton);
         controls.add(timerStopButton);
         controls.add(timerResetButton);
-        controls.add(timerMiniButton);
 
         panel.add(config, BorderLayout.NORTH);
         panel.add(timerTimeLabel, BorderLayout.CENTER);
@@ -1085,6 +1070,14 @@ public class AppFrame extends JFrame {
         revisionScroll.setPreferredSize(new Dimension(200, 140));
         revisionCard.add(revisionScroll, BorderLayout.CENTER);
 
+        JTable questionsTopicTable = new JTable(questionsByTopicAnalysisModel);
+        questionsTopicTable.setRowHeight(24);
+        JPanel questionsTopicCard = new JPanel(new BorderLayout(8, 8));
+        questionsTopicCard.setBorder(BorderFactory.createTitledBorder("Questions Solved by Topic"));
+        JScrollPane questionsTopicScroll = new JScrollPane(questionsTopicTable);
+        questionsTopicScroll.setPreferredSize(new Dimension(200, 140));
+        questionsTopicCard.add(questionsTopicScroll, BorderLayout.CENTER);
+
         JPanel dayOfWeekCard = new JPanel(new BorderLayout(8, 8));
         dayOfWeekCard.setBorder(BorderFactory.createTitledBorder("By Day of Week (Last 7 Days)"));
         dayOfWeekCard.add(weeklyBarChartPanel, BorderLayout.CENTER);
@@ -1142,27 +1135,30 @@ public class AppFrame extends JFrame {
         gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
         mainContent.add(chapterCard, gbc);
 
-        // Row 3: By Activity (Col 0, spans 1 Col and 1 Row)
+        // Row 3: By Activity, Questions Solved by Topic, Revision by Topic (all 1x1)
         gbc.gridy = 3; gbc.gridheight = 1; gbc.weighty = 0.5;
         
         gbc.gridx = 0; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(activityCard, gbc);
 
-        // Row 3: Revision by Topic (Col 1, spans 1 Col and 1 Row)
         gbc.gridx = 1; gbc.gridwidth = 1; gbc.weightx = 1.0;
+        mainContent.add(questionsTopicCard, gbc);
+
+        gbc.gridx = 2; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(revisionCard, gbc);
 
-        // Row 3: By Day of Week (Col 2, spans 1 Col and 1 Row)
-        gbc.gridx = 2; gbc.gridwidth = 1; gbc.weightx = 1.0;
+        // Row 4: By Day of Week (Spans all 3 columns, 1 row)
+        gbc.gridy = 4;
+        gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(dayOfWeekCard, gbc);
 
-        // Row 4: Daily Session Timeline (Spans all 3 columns, 1 row)
-        gbc.gridy = 4;
+        // Row 5: Daily Session Timeline (Spans all 3 columns, 1 row)
+        gbc.gridy = 5;
         gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(timelineCard, gbc);
 
-        // Row 5: Activity Heatmap (Spans all 3 columns, 1 row)
-        gbc.gridy = 5;
+        // Row 6: Activity Heatmap (Spans all 3 columns, 1 row)
+        gbc.gridy = 6;
         gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(heatmapCard, gbc);
 
@@ -1496,7 +1492,12 @@ public class AppFrame extends JFrame {
         long pyqSec = 0;
         long revisionSec = 0;
         long generalSec = 0;
+        int dppQ = 0;
+        int practiceQ = 0;
+        int pyqQ = 0;
         java.util.Map<String, Long> byRevisionTopic = new java.util.HashMap<>();
+        java.util.Map<String, Long> byQuestionTopicDuration = new java.util.HashMap<>();
+        java.util.Map<String, Integer> byQuestionTopicSolved = new java.util.HashMap<>();
  
         for (SessionRecord session : sessions) {
             String desc = session.getDescription() != null ? session.getDescription() : "";
@@ -1505,13 +1506,33 @@ public class AppFrame extends JFrame {
                 String qType = desc.substring("Questions: ".length());
                 if (qType.startsWith("DPP Questions")) {
                     dppSec += sec;
+                    dppQ += session.getQuestionsSolved();
                 } else if (qType.startsWith("Practice Book Questions")) {
                     practiceSec += sec;
+                    practiceQ += session.getQuestionsSolved();
                 } else if (qType.startsWith("Previous Year Questions")) {
                     pyqSec += sec;
+                    pyqQ += session.getQuestionsSolved();
                 } else {
                     generalSec += sec;
                 }
+
+                // Parse the topic (qDesc) from the description
+                String content = desc.substring("Questions: ".length());
+                int solvedIdx = content.indexOf(" (Solved:");
+                if (solvedIdx != -1) {
+                    content = content.substring(0, solvedIdx);
+                }
+                String qDesc = "";
+                int commaIdx = content.indexOf(',');
+                if (commaIdx != -1) {
+                    qDesc = content.substring(commaIdx + 1).trim();
+                }
+                if (qDesc.isEmpty()) {
+                    qDesc = "General / Unnamed";
+                }
+                byQuestionTopicDuration.put(qDesc, byQuestionTopicDuration.getOrDefault(qDesc, 0L) + sec);
+                byQuestionTopicSolved.put(qDesc, byQuestionTopicSolved.getOrDefault(qDesc, 0) + session.getQuestionsSolved());
             } else if (desc.startsWith("Revision: ")) {
                 String topic = desc.substring("Revision: ".length()).trim();
                 if (topic.isEmpty()) topic = "General/Unnamed";
@@ -1522,18 +1543,50 @@ public class AppFrame extends JFrame {
             }
         }
  
+        String dppAvg = "-";
+        if (dppQ > 0) {
+            dppAvg = formatAvgQTime((double) dppSec / dppQ);
+        }
+        String practiceAvg = "-";
+        if (practiceQ > 0) {
+            practiceAvg = formatAvgQTime((double) practiceSec / practiceQ);
+        }
+        String pyqAvg = "-";
+        if (pyqQ > 0) {
+            pyqAvg = formatAvgQTime((double) pyqSec / pyqQ);
+        }
+
         activityAnalysisModel.setRowCount(0);
-        activityAnalysisModel.addRow(new Object[]{"DPP Questions", formatDuration(dppSec)});
-        activityAnalysisModel.addRow(new Object[]{"Practice Book Questions", formatDuration(practiceSec)});
-        activityAnalysisModel.addRow(new Object[]{"Previous Year Questions", formatDuration(pyqSec)});
-        activityAnalysisModel.addRow(new Object[]{"Revision (Total)", formatDuration(revisionSec)});
-        activityAnalysisModel.addRow(new Object[]{"General / Other", formatDuration(generalSec)});
+        activityAnalysisModel.addRow(new Object[]{"DPP Questions", formatDuration(dppSec), dppQ > 0 ? String.valueOf(dppQ) : "-", dppAvg});
+        activityAnalysisModel.addRow(new Object[]{"Practice Book Questions", formatDuration(practiceSec), practiceQ > 0 ? String.valueOf(practiceQ) : "-", practiceAvg});
+        activityAnalysisModel.addRow(new Object[]{"Previous Year Questions", formatDuration(pyqSec), pyqQ > 0 ? String.valueOf(pyqQ) : "-", pyqAvg});
+        activityAnalysisModel.addRow(new Object[]{"Revision (Total)", formatDuration(revisionSec), "-", "-"});
+        activityAnalysisModel.addRow(new Object[]{"General / Other", formatDuration(generalSec), "-", "-"});
  
         revisionAnalysisModel.setRowCount(0);
         java.util.List<java.util.Map.Entry<String, Long>> sortedRevisions = new java.util.ArrayList<>(byRevisionTopic.entrySet());
         sortedRevisions.sort((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()));
         for (java.util.Map.Entry<String, Long> entry : sortedRevisions) {
             revisionAnalysisModel.addRow(new Object[]{entry.getKey(), formatDuration(entry.getValue())});
+        }
+
+        questionsByTopicAnalysisModel.setRowCount(0);
+        java.util.List<java.util.Map.Entry<String, Long>> sortedQuestionTopics = new java.util.ArrayList<>(byQuestionTopicDuration.entrySet());
+        sortedQuestionTopics.sort((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()));
+        for (java.util.Map.Entry<String, Long> entry : sortedQuestionTopics) {
+            String topic = entry.getKey();
+            long sec = entry.getValue();
+            int solved = byQuestionTopicSolved.getOrDefault(topic, 0);
+            String avgTimeStr = "-";
+            if (solved > 0) {
+                avgTimeStr = formatAvgQTime((double) sec / solved);
+            }
+            questionsByTopicAnalysisModel.addRow(new Object[]{
+                topic,
+                formatDuration(sec),
+                solved > 0 ? String.valueOf(solved) : "-",
+                avgTimeStr
+            });
         }
 
         // Day of Week breakdown (Always Last 7 Days)
@@ -1635,7 +1688,7 @@ public class AppFrame extends JFrame {
 
     public void startStopwatch() {
         if (subjects.isEmpty()) {
-            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Add at least one subject in the Subjects tab first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Add at least one subject in the Subjects tab first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -1643,7 +1696,7 @@ public class AppFrame extends JFrame {
             String selectedSubject = (String) stopwatchSubjectCombo.getSelectedItem();
 
             if (selectedSubject == null || selectedSubject.trim().isEmpty()) {
-                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+                JOptionPane.showMessageDialog(this,
                     "Select a subject from the list before starting stopwatch.",
                     "No Subject Selected",
                     JOptionPane.WARNING_MESSAGE);
@@ -1712,7 +1765,9 @@ public class AppFrame extends JFrame {
         }
 
         if (stopwatchRunning) {
-            pauseStopwatch();
+            stopwatchElapsedMillis += (System.nanoTime() - stopwatchStartNano) / 1_000_000;
+            stopwatchRunning = false;
+            stopwatchUiTimer.stop();
         }
 
         long durationSeconds = Math.max(1, stopwatchElapsedMillis / 1000);
@@ -1720,12 +1775,50 @@ public class AppFrame extends JFrame {
 
         String activityType = (String) stopwatchActivityTypeCombo.getSelectedItem();
         String activityDetail = "";
+        int questionsSolved = 0;
+
         if ("General".equals(activityType)) {
             activityDetail = stopwatchActivityField.getText().trim();
         } else if ("Questions".equals(activityType)) {
             String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
             String qDesc = stopwatchQuestionDescField.getText().trim();
-            activityDetail = "Questions: " + qType + (qDesc.isEmpty() ? "" : ", " + qDesc);
+            if ("Practice Book Questions".equals(qType) || "Previous Year Questions".equals(qType)) {
+                while (true) {
+                    String input = JOptionPane.showInputDialog(
+                        this,
+                        "Enter number of questions solved during this session:",
+                        "Questions Solved",
+                        JOptionPane.QUESTION_MESSAGE
+                    );
+                    if (input == null) {
+                        break; // Cancelled
+                    }
+                    String trimmed = input.trim();
+                    if (trimmed.isEmpty()) {
+                        break; // Empty
+                    }
+                    try {
+                        questionsSolved = Integer.parseInt(trimmed);
+                        if (questionsSolved >= 0) {
+                            break;
+                        } else {
+                            JOptionPane.showMessageDialog(this, "Please enter a non-negative integer.", "Invalid Input", JOptionPane.WARNING_MESSAGE);
+                        }
+                    } catch (NumberFormatException e) {
+                        JOptionPane.showMessageDialog(this, "Please enter a valid integer.", "Invalid Input", JOptionPane.WARNING_MESSAGE);
+                    }
+                }
+                if (questionsSolved > 0) {
+                    double avgTimeSec = (double) durationSeconds / questionsSolved;
+                    String avgTimeStr = formatAvgQTime(avgTimeSec);
+                    activityDetail = "Questions: " + qType + (qDesc.isEmpty() ? "" : ", " + qDesc)
+                                     + " (Solved: " + questionsSolved + ", Avg Time: " + avgTimeStr + ")";
+                } else {
+                    activityDetail = "Questions: " + qType + (qDesc.isEmpty() ? "" : ", " + qDesc);
+                }
+            } else {
+                activityDetail = "Questions: " + qType + (qDesc.isEmpty() ? "" : ", " + qDesc);
+            }
         } else if ("Lecture".equals(activityType)) {
             String ch = stopwatchChapterField.getText().trim();
             String lec = stopwatchLectureField.getText().trim();
@@ -1744,6 +1837,19 @@ public class AppFrame extends JFrame {
                     s.getSubject().equalsIgnoreCase(resumedSession.getSubject()) &&
                     s.getType() == resumedSession.getType()) {
                     int totalPauses = resumedSession.getPauseCount() + currentSessionPauseCount;
+                    int totalQuestions = resumedSession.getQuestionsSolved() + questionsSolved;
+                    
+                    if (totalQuestions > 0) {
+                        double avgTimeSec = (double) durationSeconds / totalQuestions;
+                        String avgTimeStr = formatAvgQTime(avgTimeSec);
+                        String cleanDetail = activityDetail;
+                        int idx = cleanDetail.indexOf(" (Solved:");
+                        if (idx != -1) {
+                            cleanDetail = cleanDetail.substring(0, idx);
+                        }
+                        activityDetail = cleanDetail + " (Solved: " + totalQuestions + ", Avg Time: " + avgTimeStr + ")";
+                    }
+                    
                     allSessions.set(i, new SessionRecord(
                         SessionRecord.SessionType.STOPWATCH,
                         stopwatchSubject,
@@ -1751,7 +1857,8 @@ public class AppFrame extends JFrame {
                         end,
                         durationSeconds,
                         activityDetail,
-                        totalPauses
+                        totalPauses,
+                        totalQuestions
                     ));
                     updated = true;
                     break;
@@ -1767,7 +1874,8 @@ public class AppFrame extends JFrame {
                     end,
                     durationSeconds,
                     activityDetail,
-                    currentSessionPauseCount
+                    currentSessionPauseCount,
+                    questionsSolved
                 ));
             }
             resumedSession = null;
@@ -1779,7 +1887,8 @@ public class AppFrame extends JFrame {
                 end,
                 durationSeconds,
                 activityDetail,
-                currentSessionPauseCount
+                currentSessionPauseCount,
+                questionsSolved
             ));
         }
 
@@ -1787,10 +1896,7 @@ public class AppFrame extends JFrame {
         refreshExportAvailability();
         notifySessionLogged(durationSeconds);
         resetStopwatch();
-        JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Stopwatch session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
-        if (miniWindow != null) {
-            closeMiniWindow();
-        }
+        JOptionPane.showMessageDialog(this, "Stopwatch session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
     }
 
     public void resetStopwatch() {
@@ -1835,9 +1941,6 @@ public class AppFrame extends JFrame {
 
         String formatted = formatDuration(totalSeconds);
         stopwatchTimeLabel.setText(formatted);
-        if (miniWindow != null) {
-            miniWindow.updateTime(formatted);
-        }
     }
 
     private void updateStopwatchButtons() {
@@ -1854,9 +1957,6 @@ public class AppFrame extends JFrame {
         stopwatchChapterField.setEnabled(!stopwatchStarted);
         stopwatchLectureField.setEnabled(!stopwatchStarted);
         stopwatchRevisionTopicField.setEnabled(!stopwatchStarted);
-        if (miniWindow != null) {
-            miniWindow.updateState();
-        }
     }
 
     public void startTimer() {
@@ -1868,7 +1968,7 @@ public class AppFrame extends JFrame {
             timerRemainingSeconds = timerTotalSeconds;
 
             if (timerTotalSeconds <= 0) {
-                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Set a time greater than 00:00:00.", "Invalid Time", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Set a time greater than 00:00:00.", "Invalid Time", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
@@ -1923,13 +2023,10 @@ public class AppFrame extends JFrame {
         if (elapsed > 0) {
             logTimerSession(elapsed);
             notifySessionLogged(elapsed);
-            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Timer session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Timer session logged.", "Saved", JOptionPane.INFORMATION_MESSAGE);
         }
 
         resetTimer();
-        if (miniWindow != null) {
-            closeMiniWindow();
-        }
     }
 
     public void resetTimer() {
@@ -1964,9 +2061,6 @@ public class AppFrame extends JFrame {
 
         String formatted = formatDuration(Math.max(0, timerRemainingSeconds));
         timerTimeLabel.setText(formatted);
-        if (miniWindow != null) {
-            miniWindow.updateTime(formatted);
-        }
 
         if (timerRemainingSeconds <= 0) {
             timerTick.stop();
@@ -1974,11 +2068,8 @@ public class AppFrame extends JFrame {
             long elapsed = timerTotalSeconds;
             logTimerSession(elapsed);
             notifySessionLogged(elapsed);
-            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this, "Timer finished and session logged.", "Completed", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Timer finished and session logged.", "Completed", JOptionPane.INFORMATION_MESSAGE);
             resetTimer();
-            if (miniWindow != null) {
-                closeMiniWindow();
-            }
         }
     }
 
@@ -2488,7 +2579,7 @@ public class AppFrame extends JFrame {
 
         ThemeManager.applyTheme(panel, ThemeManager.getColors(ThemeManager.loadTheme()));
 
-        int result = JOptionPane.showConfirmDialog(miniWindow != null ? miniWindow : this,
+        int result = JOptionPane.showConfirmDialog(this,
             panel,
             title,
             JOptionPane.OK_CANCEL_OPTION,
@@ -2499,7 +2590,7 @@ public class AppFrame extends JFrame {
             LocalDate endLocal = selectedEnd[0];
 
             if (startLocal.isAfter(endLocal)) {
-                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+                JOptionPane.showMessageDialog(this,
                     "Start date cannot be after end date.",
                     "Invalid Range",
                     JOptionPane.WARNING_MESSAGE);
@@ -2624,9 +2715,6 @@ public class AppFrame extends JFrame {
         timerPauseResumeButton.setText(timerRunning ? "Pause" : "Resume");
         timerStopButton.setEnabled(timerStarted);
         timerResetButton.setEnabled(timerStarted);
-        if (miniWindow != null) {
-            miniWindow.updateState();
-        }
     }
 
     private String formatDuration(long totalSeconds) {
@@ -2636,25 +2724,23 @@ public class AppFrame extends JFrame {
         return String.format("%02d:%02d:%02d", hours, minutes, seconds);
     }
 
-    public void openMiniWindow(SessionRecord.SessionType mode) {
-        if (miniWindow != null) {
-            miniWindow.dispose();
+    private String formatAvgQTime(double avgSec) {
+        if (avgSec >= 60) {
+            long mins = (long) avgSec / 60;
+            long secs = (long) Math.round(avgSec % 60);
+            if (secs == 60) {
+                mins++;
+                secs = 0;
+            }
+            return mins + "m:" + secs + "s/q";
+        } else if (avgSec >= 1.0) {
+            return Math.round(avgSec) + "s/q";
+        } else {
+            return String.format("%.1fs/q", avgSec);
         }
-        miniWindow = new MiniWindow(this, mode);
-        miniWindow.setVisible(true);
-        this.setVisible(false);
-        System.gc();
     }
 
-    public void closeMiniWindow() {
-        if (miniWindow != null) {
-            miniWindow.dispose();
-            miniWindow = null;
-        }
-        this.setVisible(true);
-        refreshSessionsTable();
-        System.gc();
-    }
+    // MiniWindow launch methods removed (mini mode discarded)
 
     public String getStopwatchSubject() {
         return stopwatchSubject != null ? stopwatchSubject : (String) stopwatchSubjectCombo.getSelectedItem();
@@ -2688,25 +2774,14 @@ public class AppFrame extends JFrame {
             "  Alt + S : Start Stopwatch\n" +
             "  Alt + P : Pause / Resume Stopwatch\n" +
             "  Alt + L : Stop & Log Stopwatch Session\n" +
-            "  Alt + R : Reset Stopwatch\n" +
-            "  Alt + M : Enter Mini Mode\n\n" +
+            "  Alt + R : Reset Stopwatch\n\n" +
             "Timer:\n" +
             "  Alt + S : Start Timer\n" +
             "  Alt + P : Pause / Resume Timer\n" +
             "  Alt + T : Stop Timer\n" +
-            "  Alt + R : Reset Timer\n" +
-            "  Alt + M : Enter Mini Mode\n\n" +
-            "=== Mini Mode Window Shortcuts ===\n" +
-            "  Space   : Start / Pause / Resume\n" +
-            "  Enter   : Stop & Log (Stopwatch) or Stop (Timer)\n" +
-            "  Escape  : Maximize (Restore Full Mode)\n" +
-            "  Alt + S : Start\n" +
-            "  Alt + P : Pause / Resume\n" +
-            "  Alt + L / Alt + T : Stop / Log\n" +
-            "  Alt + R : Reset\n" +
-            "  Alt + M : Maximize";
+            "  Alt + R : Reset Timer";
         
-        JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+        JOptionPane.showMessageDialog(this,
             msg,
             "Keyboard Shortcuts Help",
             JOptionPane.INFORMATION_MESSAGE);
@@ -2806,7 +2881,7 @@ public class AppFrame extends JFrame {
         panel.add(new JLabel("Minutes:"));
         panel.add(minSpinner);
         
-        int result = JOptionPane.showConfirmDialog(miniWindow != null ? miniWindow : this,
+        int result = JOptionPane.showConfirmDialog(this,
             panel,
             "Set Daily Goal",
             JOptionPane.OK_CANCEL_OPTION,
@@ -2817,7 +2892,7 @@ public class AppFrame extends JFrame {
             int mins = (Integer) minSpinner.getValue();
             int totalMins = hrs * 60 + mins;
             if (totalMins <= 0) {
-                JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+                JOptionPane.showMessageDialog(this,
                     "Goal must be greater than 0 minutes.",
                     "Invalid Goal",
                     JOptionPane.WARNING_MESSAGE);
@@ -2825,7 +2900,7 @@ public class AppFrame extends JFrame {
             }
             storageService.saveDailyGoalMinutes(totalMins);
             refreshAnalysis();
-            JOptionPane.showMessageDialog(miniWindow != null ? miniWindow : this,
+            JOptionPane.showMessageDialog(this,
                 "Daily goal saved successfully!",
                 "Goal Saved",
                 JOptionPane.INFORMATION_MESSAGE);
@@ -2836,9 +2911,6 @@ public class AppFrame extends JFrame {
         ThemeManager.saveTheme(theme);
         ThemeManager.ThemeColors colors = ThemeManager.getColors(theme);
         ThemeManager.applyTheme(this, colors);
-        if (miniWindow != null) {
-            ThemeManager.applyTheme(miniWindow, colors);
-        }
         if (aiChatLogPane != null) {
             rebuildChatHtml();
         }
@@ -3112,6 +3184,7 @@ public class AppFrame extends JFrame {
             
             java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
             exitItem.addActionListener(e -> {
+                cleanupSystemTray();
                 System.exit(0);
             });
             popup.add(exitItem);
@@ -3125,6 +3198,22 @@ public class AppFrame extends JFrame {
                 e.printStackTrace();
             }
         }
+    }
+
+    public void cleanupSystemTray() {
+        if (SystemTray.isSupported() && trayIcon != null && trayIconAdded) {
+            try {
+                SystemTray.getSystemTray().remove(trayIcon);
+                trayIconAdded = false;
+            } catch (Exception ignored) {}
+        }
+    }
+
+    public void restoreFromTray() {
+        setVisible(true);
+        setExtendedState(JFrame.NORMAL);
+        toFront();
+        requestFocus();
     }
 
     private void sendNotification(String title, String message, TrayIcon.MessageType type) {
@@ -3473,6 +3562,11 @@ public class AppFrame extends JFrame {
     }
 
     private int calculateSessionFocusScore(SessionRecord s) {
+        String desc = s.getDescription() != null ? s.getDescription() : "";
+        if (desc.startsWith("Questions: ")) {
+            return 100;
+        }
+
         long activeSec = s.getDurationSeconds();
         if (activeSec < 60) return 100; // Ignore tiny sessions under a minute
         
@@ -4040,6 +4134,7 @@ public class AppFrame extends JFrame {
         clearChatBtn.addActionListener(e -> {
             aiChatHistoryList.clear();
             addSystemWelcomeMessage();
+            saveChatHistory();
             rebuildChatHtml();
         });
         
@@ -4130,7 +4225,10 @@ public class AppFrame extends JFrame {
         java.awt.CardLayout cl = (java.awt.CardLayout) aiCardPanel.getLayout();
         cl.show(aiCardPanel, "CHAT");
         if (aiChatHistoryList.isEmpty()) {
-            addSystemWelcomeMessage();
+            aiChatHistoryList.addAll(loadChatHistory());
+            if (aiChatHistoryList.isEmpty()) {
+                addSystemWelcomeMessage();
+            }
         }
         rebuildChatHtml();
     }
@@ -4300,6 +4398,7 @@ public class AppFrame extends JFrame {
         aiStatusLabel.setText("Thinking...");
         
         aiChatHistoryList.add(new ChatTurn("user", userInput));
+        saveChatHistory();
         rebuildChatHtml();
         
         new Thread(() -> {
@@ -4352,6 +4451,7 @@ public class AppFrame extends JFrame {
                     String aiText = parseOpenRouterResponseText(responseBody);
                     javax.swing.SwingUtilities.invokeLater(() -> {
                         aiChatHistoryList.add(new ChatTurn("assistant", aiText));
+                        saveChatHistory();
                         rebuildChatHtml();
                         aiStatusLabel.setText(" ");
                         aiInputTextArea.setEnabled(true);
@@ -4438,7 +4538,9 @@ public class AppFrame extends JFrame {
         }
         
         String rawContent = json.substring(valueStart + 1, valueEnd);
-        return unescapeJson(rawContent);
+        String unescaped = unescapeJson(rawContent);
+        unescaped = unescaped.replaceAll("(?i)\\b(\\w+n)['\u2019](?:s|re|or)\\b", "$1't");
+        return unescaped;
     }
 
     private String unescapeJson(String str) {
@@ -4778,5 +4880,48 @@ public class AppFrame extends JFrame {
         escaped = escaped.replaceAll("`(.*?)`", "<font face='monospace' color='" + codeColor + "' style='background-color: " + codeBg + ";'> $1 </font>");
         return escaped;
     }
+
+    private void saveChatHistory() {
+        java.nio.file.Path file = java.nio.file.Paths.get(System.getProperty("user.home"), ".timelogger_chat_history");
+        try {
+            List<String> lines = new ArrayList<>();
+            for (ChatTurn turn : aiChatHistoryList) {
+                String encodedText = java.util.Base64.getEncoder().encodeToString(turn.text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                lines.add(turn.role + ":" + encodedText);
+            }
+            java.nio.file.Files.write(file, lines, java.nio.charset.StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (java.io.IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private List<ChatTurn> loadChatHistory() {
+        List<ChatTurn> history = new ArrayList<>();
+        java.nio.file.Path file = java.nio.file.Paths.get(System.getProperty("user.home"), ".timelogger_chat_history");
+        try {
+            if (!java.nio.file.Files.exists(file)) {
+                return history;
+            }
+            List<String> lines = java.nio.file.Files.readAllLines(file, java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : lines) {
+                int colonIdx = line.indexOf(':');
+                if (colonIdx != -1) {
+                    String role = line.substring(0, colonIdx);
+                    String encodedText = line.substring(colonIdx + 1);
+                    byte[] decodedBytes = java.util.Base64.getDecoder().decode(encodedText);
+                    String text = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
+                    if ("assistant".equals(role)) {
+                        text = text.replaceAll("(?i)\\b(\\w+n)['\u2019](?:s|re|or)\\b", "$1't");
+                    }
+                    history.add(new ChatTurn(role, text));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return history;
+    }
+
 }
 
