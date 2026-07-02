@@ -301,17 +301,65 @@ public class StorageService {
         }
     }
 
+    public List<String> extractQuestionTopicsFromLogs() {
+        List<String> topics = new ArrayList<>();
+        List<SessionRecord> sessions = loadSessions();
+        for (SessionRecord s : sessions) {
+            String desc = s.getDescription();
+            if (desc != null && desc.startsWith("Questions: ")) {
+                String content = desc.substring("Questions: ".length());
+                int commaIndex = content.indexOf(",");
+                if (commaIndex != -1) {
+                    String qDesc = content.substring(commaIndex + 1).trim();
+                    int solvedIdx = qDesc.indexOf(" (Solved:");
+                    if (solvedIdx != -1) {
+                        qDesc = qDesc.substring(0, solvedIdx).trim();
+                    }
+                    if (!qDesc.isEmpty() && !topics.contains(qDesc)) {
+                        topics.add(qDesc);
+                    }
+                }
+            }
+        }
+        return topics;
+    }
+
     public List<String> loadQuestionTopics() {
         try {
-            if (!Files.exists(questionTopicsFile)) {
-                return new ArrayList<>(Arrays.asList("General", "Practice", "Revision"));
+            List<String> topics = new ArrayList<>();
+            if (Files.exists(questionTopicsFile)) {
+                List<String> lines = Files.readAllLines(questionTopicsFile, StandardCharsets.UTF_8);
+                for (String line : lines) {
+                    String trim = line.trim();
+                    if (!trim.isEmpty() && !topics.contains(trim)) {
+                        topics.add(trim);
+                    }
+                }
+            } else {
+                topics.addAll(Arrays.asList("General", "Practice", "Revision"));
             }
-            List<String> lines = Files.readAllLines(questionTopicsFile, StandardCharsets.UTF_8);
-            return lines.stream()
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .distinct()
-                .collect(Collectors.toList());
+
+            List<String> logTopics = extractQuestionTopicsFromLogs();
+            boolean changed = false;
+            for (String lt : logTopics) {
+                boolean exists = false;
+                for (String t : topics) {
+                    if (t.equalsIgnoreCase(lt)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    topics.add(lt);
+                    changed = true;
+                }
+            }
+
+            if (changed || !Files.exists(questionTopicsFile)) {
+                saveQuestionTopics(topics);
+            }
+
+            return topics;
         } catch (IOException e) {
             throw new RuntimeException("Unable to read question topics", e);
         }
