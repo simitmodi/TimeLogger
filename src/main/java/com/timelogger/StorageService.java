@@ -17,11 +17,13 @@ public class StorageService {
     private final Path appDirectory;
     private final Path subjectsFile;
     private final Path sessionsFile;
+    private final Path questionTopicsFile;
 
     public StorageService() {
         this.appDirectory = Paths.get(System.getProperty("user.dir"));
         this.subjectsFile = appDirectory.resolve("subjects.txt");
         this.sessionsFile = appDirectory.resolve("sessions.log");
+        this.questionTopicsFile = appDirectory.resolve("question_topics.txt");
         initialize();
     }
 
@@ -189,6 +191,9 @@ public class StorageService {
             if (!Files.exists(sessionsFile)) {
                 Files.createFile(sessionsFile);
             }
+            if (!Files.exists(questionTopicsFile)) {
+                Files.write(questionTopicsFile, Arrays.asList("General", "Practice", "Revision"), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            }
             performAutoBackup();
         } catch (IOException e) {
             throw new RuntimeException("Unable to initialize storage", e);
@@ -294,6 +299,64 @@ public class StorageService {
         } catch (IOException e) {
             throw new RuntimeException("Unable to save OpenRouter model selection", e);
         }
+    }
+
+    public List<String> loadQuestionTopics() {
+        try {
+            if (!Files.exists(questionTopicsFile)) {
+                return new ArrayList<>(Arrays.asList("General", "Practice", "Revision"));
+            }
+            List<String> lines = Files.readAllLines(questionTopicsFile, StandardCharsets.UTF_8);
+            return lines.stream()
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to read question topics", e);
+        }
+    }
+
+    public void saveQuestionTopics(List<String> topics) {
+        List<String> cleaned = topics.stream()
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .distinct()
+            .collect(Collectors.toList());
+        try {
+            Files.write(questionTopicsFile, cleaned, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save question topics", e);
+        }
+    }
+
+    public String loadLastQuestionDesc(String type) {
+        Path file = appDirectory.resolve("last_question_descs.properties");
+        if (!Files.exists(file)) {
+            return "";
+        }
+        java.util.Properties props = new java.util.Properties();
+        try (java.io.Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            props.load(reader);
+            return props.getProperty(type, "");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public void saveLastQuestionDesc(String type, String desc) {
+        Path file = appDirectory.resolve("last_question_descs.properties");
+        java.util.Properties props = new java.util.Properties();
+        if (Files.exists(file)) {
+            try (java.io.Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                props.load(reader);
+            } catch (Exception ignored) {}
+        }
+        props.setProperty(type, desc);
+        try (java.io.Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            props.store(writer, null);
+        } catch (Exception ignored) {}
     }
 
 

@@ -112,7 +112,7 @@ public class AppFrame extends JFrame {
     final JComboBox<String> stopwatchQuestionTypeCombo = new JComboBox<>(new String[]{
         "DPP Questions", "Practice Book Questions", "Previous Year Questions"
     });
-    final JTextField stopwatchQuestionDescField = new JTextField(15);
+    final JComboBox<String> stopwatchQuestionDescCombo = new JComboBox<>();
     final JTextField stopwatchChapterField = new JTextField(5);
     final JTextField stopwatchLectureField = new JTextField(5);
     final JTextField stopwatchRevisionTopicField = new JTextField(20);
@@ -273,6 +273,12 @@ public class AppFrame extends JFrame {
         add(createTabs(), BorderLayout.CENTER);
 
         refreshStopwatchSubjects();
+        refreshQuestionTopicsDropdown();
+        String initialQType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+        if (initialQType != null) {
+            String lastDesc = storageService.loadLastQuestionDesc(initialQType);
+            selectOrAddQuestionDesc(lastDesc);
+        }
         refreshTimerSubjects();
         refreshLogsSubjects();
         refreshSessionsTable();
@@ -329,9 +335,9 @@ public class AppFrame extends JFrame {
             } else if (child instanceof JComboBox || child instanceof JTextField || child instanceof JSpinner) {
                 child.setFont(controlFont);
                 int width = 150;
-                if (child == stopwatchActivityField || child == stopwatchQuestionDescField || child == stopwatchRevisionTopicField) {
+                if (child == stopwatchActivityField || child == stopwatchRevisionTopicField) {
                     width = Math.max(150, getWidth() / 4);
-                } else if (child == stopwatchQuestionTypeCombo) {
+                } else if (child == stopwatchQuestionTypeCombo || child == stopwatchQuestionDescCombo) {
                     width = Math.max(200, child.getPreferredSize().width + 40);
                 } else if (child == stopwatchChapterField || child == stopwatchLectureField) {
                     width = Math.max(40, getWidth() / 20);
@@ -433,7 +439,7 @@ public class AppFrame extends JFrame {
         stopwatchSubjectLabel.setFont(new Font("SansSerif", Font.PLAIN, 18));
 
         stopwatchActivityField.setPreferredSize(new Dimension(300, 28));
-        stopwatchQuestionDescField.setPreferredSize(new Dimension(300, 28));
+        stopwatchQuestionDescCombo.setPreferredSize(new Dimension(300, 28));
         stopwatchQuestionTypeCombo.setPreferredSize(new Dimension(200, 28));
         stopwatchChapterField.setPreferredSize(new Dimension(50, 28));
         stopwatchLectureField.setPreferredSize(new Dimension(50, 28));
@@ -520,7 +526,7 @@ public class AppFrame extends JFrame {
         questionsCard.add(new JLabel("Type: "));
         questionsCard.add(stopwatchQuestionTypeCombo);
         questionsCard.add(new JLabel(" Desc: "));
-        questionsCard.add(stopwatchQuestionDescField);
+        questionsCard.add(stopwatchQuestionDescCombo);
 
         JPanel lectureCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         lectureCard.add(new JLabel("Ch No: "));
@@ -545,6 +551,47 @@ public class AppFrame extends JFrame {
             stopwatchActivitySubPanel.repaint();
             config.revalidate();
             config.repaint();
+        });
+
+        final String[] lastSelectedDesc = {null};
+        stopwatchQuestionDescCombo.addActionListener(e -> {
+            String selected = (String) stopwatchQuestionDescCombo.getSelectedItem();
+            if ("[Add Custom...]".equals(selected)) {
+                String input = JOptionPane.showInputDialog(this, "Enter custom topic name:", "New Topic", JOptionPane.PLAIN_MESSAGE);
+                if (input != null) {
+                    input = input.trim();
+                    if (!input.isEmpty() && !"[Add Custom...]".equals(input)) {
+                        boolean exists = false;
+                        for (int i = 0; i < stopwatchQuestionDescCombo.getItemCount(); i++) {
+                            if (input.equalsIgnoreCase(stopwatchQuestionDescCombo.getItemAt(i))) {
+                                stopwatchQuestionDescCombo.setSelectedIndex(i);
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            int count = stopwatchQuestionDescCombo.getItemCount();
+                            stopwatchQuestionDescCombo.insertItemAt(input, count - 1);
+                            stopwatchQuestionDescCombo.setSelectedItem(input);
+                            saveCurrentQuestionTopics();
+                        }
+                    } else {
+                        revertQuestionDescSelection(lastSelectedDesc[0]);
+                    }
+                } else {
+                    revertQuestionDescSelection(lastSelectedDesc[0]);
+                }
+            } else {
+                lastSelectedDesc[0] = selected;
+            }
+        });
+
+        stopwatchQuestionTypeCombo.addActionListener(e -> {
+            String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+            if (qType != null) {
+                String lastDesc = storageService.loadLastQuestionDesc(qType);
+                selectOrAddQuestionDesc(lastDesc);
+            }
         });
 
         GridBagConstraints gbcSub = new GridBagConstraints();
@@ -815,11 +862,15 @@ public class AppFrame extends JFrame {
                         if (commaIndex != -1) {
                             qType = content.substring(0, commaIndex).trim();
                             qDesc = content.substring(commaIndex + 1).trim();
+                            int solvedIdx = qDesc.indexOf(" (Solved:");
+                            if (solvedIdx != -1) {
+                                qDesc = qDesc.substring(0, solvedIdx).trim();
+                            }
                         } else {
                             qType = content.trim();
                         }
                         stopwatchQuestionTypeCombo.setSelectedItem(qType);
-                        stopwatchQuestionDescField.setText(qDesc);
+                        selectOrAddQuestionDesc(qDesc);
                     } else if (desc.startsWith("Lecture: ")) {
                         stopwatchActivityTypeCombo.setSelectedItem("Lecture");
                         String content = desc.substring("Lecture: ".length());
@@ -1781,7 +1832,11 @@ public class AppFrame extends JFrame {
             activityDetail = stopwatchActivityField.getText().trim();
         } else if ("Questions".equals(activityType)) {
             String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
-            String qDesc = stopwatchQuestionDescField.getText().trim();
+            Object selectedObj = stopwatchQuestionDescCombo.getSelectedItem();
+            String qDesc = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : ((String) selectedObj).trim();
+            if (!qDesc.isEmpty() && qType != null) {
+                storageService.saveLastQuestionDesc(qType, qDesc);
+            }
             if ("Practice Book Questions".equals(qType) || "Previous Year Questions".equals(qType)) {
                 while (true) {
                     String input = JOptionPane.showInputDialog(
@@ -1914,7 +1969,7 @@ public class AppFrame extends JFrame {
         stopwatchActivityField.setText("");
         stopwatchChapterField.setText("");
         stopwatchLectureField.setText("");
-        stopwatchQuestionDescField.setText("");
+        stopwatchQuestionDescCombo.setSelectedIndex(-1);
         stopwatchRevisionTopicField.setText("");
         stopwatchActivityTypeCombo.setSelectedIndex(0);
         stopwatchQuestionTypeCombo.setSelectedIndex(0);
@@ -1953,7 +2008,7 @@ public class AppFrame extends JFrame {
         stopwatchActivityTypeCombo.setEnabled(!stopwatchStarted);
         stopwatchActivityField.setEnabled(!stopwatchStarted);
         stopwatchQuestionTypeCombo.setEnabled(!stopwatchStarted);
-        stopwatchQuestionDescField.setEnabled(!stopwatchStarted);
+        stopwatchQuestionDescCombo.setEnabled(!stopwatchStarted);
         stopwatchChapterField.setEnabled(!stopwatchStarted);
         stopwatchLectureField.setEnabled(!stopwatchStarted);
         stopwatchRevisionTopicField.setEnabled(!stopwatchStarted);
@@ -4921,6 +4976,74 @@ public class AppFrame extends JFrame {
             e.printStackTrace();
         }
         return history;
+    }
+
+    private void refreshQuestionTopicsDropdown() {
+        List<String> topics = storageService.loadQuestionTopics();
+        
+        // Remove selection listener temporarily to avoid trigger during model set
+        java.awt.event.ActionListener[] listeners = stopwatchQuestionDescCombo.getActionListeners();
+        for (java.awt.event.ActionListener l : listeners) {
+            stopwatchQuestionDescCombo.removeActionListener(l);
+        }
+        
+        stopwatchQuestionDescCombo.removeAllItems();
+        for (String topic : topics) {
+            stopwatchQuestionDescCombo.addItem(topic);
+        }
+        stopwatchQuestionDescCombo.addItem("[Add Custom...]");
+        stopwatchQuestionDescCombo.setSelectedIndex(-1);
+        
+        // Re-add selection listeners
+        for (java.awt.event.ActionListener l : listeners) {
+            stopwatchQuestionDescCombo.addActionListener(l);
+        }
+    }
+
+    private void saveCurrentQuestionTopics() {
+        List<String> topics = new ArrayList<>();
+        for (int i = 0; i < stopwatchQuestionDescCombo.getItemCount(); i++) {
+            String item = stopwatchQuestionDescCombo.getItemAt(i);
+            if (item != null && !"[Add Custom...]".equals(item)) {
+                topics.add(item);
+            }
+        }
+        storageService.saveQuestionTopics(topics);
+    }
+
+    private void revertQuestionDescSelection(String val) {
+        if (val == null) {
+            stopwatchQuestionDescCombo.setSelectedIndex(-1);
+        } else {
+            stopwatchQuestionDescCombo.setSelectedItem(val);
+        }
+    }
+
+    public void selectOrAddQuestionDesc(String desc) {
+        if (desc == null || desc.trim().isEmpty()) {
+            stopwatchQuestionDescCombo.setSelectedIndex(-1);
+            return;
+        }
+        desc = desc.trim();
+        boolean found = false;
+        for (int i = 0; i < stopwatchQuestionDescCombo.getItemCount(); i++) {
+            if (desc.equalsIgnoreCase(stopwatchQuestionDescCombo.getItemAt(i))) {
+                stopwatchQuestionDescCombo.setSelectedIndex(i);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            int count = stopwatchQuestionDescCombo.getItemCount();
+            if (count > 0) {
+                stopwatchQuestionDescCombo.insertItemAt(desc, count - 1);
+                stopwatchQuestionDescCombo.setSelectedItem(desc);
+                saveCurrentQuestionTopics();
+            } else {
+                stopwatchQuestionDescCombo.addItem(desc);
+                stopwatchQuestionDescCombo.setSelectedItem(desc);
+            }
+        }
     }
 
 }
