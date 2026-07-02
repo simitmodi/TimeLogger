@@ -589,6 +589,7 @@ public class AppFrame extends JFrame {
         stopwatchQuestionTypeCombo.addActionListener(e -> {
             String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
             if (qType != null) {
+                refreshQuestionTopicsDropdown();
                 String lastDesc = storageService.loadLastQuestionDesc(qType);
                 selectOrAddQuestionDesc(lastDesc);
             }
