@@ -17,13 +17,11 @@ public class StorageService {
     private final Path appDirectory;
     private final Path subjectsFile;
     private final Path sessionsFile;
-    private final Path questionTopicsFile;
 
     public StorageService() {
         this.appDirectory = Paths.get(System.getProperty("user.dir"));
         this.subjectsFile = appDirectory.resolve("subjects.txt");
         this.sessionsFile = appDirectory.resolve("sessions.log");
-        this.questionTopicsFile = appDirectory.resolve("question_topics.txt");
         initialize();
     }
 
@@ -191,9 +189,20 @@ public class StorageService {
             if (!Files.exists(sessionsFile)) {
                 Files.createFile(sessionsFile);
             }
-            if (!Files.exists(questionTopicsFile)) {
-                Files.write(questionTopicsFile, Arrays.asList("General", "Practice", "Revision"), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            
+            Path dppFile = getQuestionTopicsFile("DPP Questions");
+            Path practiceFile = getQuestionTopicsFile("Practice Book Questions");
+            Path pyqFile = getQuestionTopicsFile("Previous Year Questions");
+            if (!Files.exists(dppFile)) {
+                Files.write(dppFile, Arrays.asList("General", "Practice", "Revision"), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             }
+            if (!Files.exists(practiceFile)) {
+                Files.write(practiceFile, Arrays.asList("General", "Practice", "Revision"), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            }
+            if (!Files.exists(pyqFile)) {
+                Files.write(pyqFile, Arrays.asList("General", "Practice", "Revision"), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            }
+
             performAutoBackup();
         } catch (IOException e) {
             throw new RuntimeException("Unable to initialize storage", e);
@@ -301,7 +310,19 @@ public class StorageService {
         }
     }
 
-    public List<String> extractQuestionTopicsFromLogs() {
+    private Path getQuestionTopicsFile(String type) {
+        String filename = "question_topics_general.txt";
+        if ("DPP Questions".equals(type)) {
+            filename = "question_topics_dpp.txt";
+        } else if ("Practice Book Questions".equals(type)) {
+            filename = "question_topics_practice.txt";
+        } else if ("Previous Year Questions".equals(type)) {
+            filename = "question_topics_pyq.txt";
+        }
+        return appDirectory.resolve(filename);
+    }
+
+    public List<String> extractQuestionTopicsFromLogs(String type) {
         List<String> topics = new ArrayList<>();
         List<SessionRecord> sessions = loadSessions();
         for (SessionRecord s : sessions) {
@@ -310,13 +331,16 @@ public class StorageService {
                 String content = desc.substring("Questions: ".length());
                 int commaIndex = content.indexOf(",");
                 if (commaIndex != -1) {
-                    String qDesc = content.substring(commaIndex + 1).trim();
-                    int solvedIdx = qDesc.indexOf(" (Solved:");
-                    if (solvedIdx != -1) {
-                        qDesc = qDesc.substring(0, solvedIdx).trim();
-                    }
-                    if (!qDesc.isEmpty() && !topics.contains(qDesc)) {
-                        topics.add(qDesc);
+                    String qType = content.substring(0, commaIndex).trim();
+                    if (qType.equals(type)) {
+                        String qDesc = content.substring(commaIndex + 1).trim();
+                        int solvedIdx = qDesc.indexOf(" (Solved:");
+                        if (solvedIdx != -1) {
+                            qDesc = qDesc.substring(0, solvedIdx).trim();
+                        }
+                        if (!qDesc.isEmpty() && !topics.contains(qDesc)) {
+                            topics.add(qDesc);
+                        }
                     }
                 }
             }
@@ -324,11 +348,12 @@ public class StorageService {
         return topics;
     }
 
-    public List<String> loadQuestionTopics() {
+    public List<String> loadQuestionTopics(String type) {
+        Path file = getQuestionTopicsFile(type);
         try {
             List<String> topics = new ArrayList<>();
-            if (Files.exists(questionTopicsFile)) {
-                List<String> lines = Files.readAllLines(questionTopicsFile, StandardCharsets.UTF_8);
+            if (Files.exists(file)) {
+                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
                 for (String line : lines) {
                     String trim = line.trim();
                     if (!trim.isEmpty() && !topics.contains(trim)) {
@@ -339,7 +364,7 @@ public class StorageService {
                 topics.addAll(Arrays.asList("General", "Practice", "Revision"));
             }
 
-            List<String> logTopics = extractQuestionTopicsFromLogs();
+            List<String> logTopics = extractQuestionTopicsFromLogs(type);
             boolean changed = false;
             for (String lt : logTopics) {
                 boolean exists = false;
@@ -355,27 +380,28 @@ public class StorageService {
                 }
             }
 
-            if (changed || !Files.exists(questionTopicsFile)) {
-                saveQuestionTopics(topics);
+            if (changed || !Files.exists(file)) {
+                saveQuestionTopics(type, topics);
             }
 
             return topics;
         } catch (IOException e) {
-            throw new RuntimeException("Unable to read question topics", e);
+            throw new RuntimeException("Unable to read question topics for " + type, e);
         }
     }
 
-    public void saveQuestionTopics(List<String> topics) {
+    public void saveQuestionTopics(String type, List<String> topics) {
+        Path file = getQuestionTopicsFile(type);
         List<String> cleaned = topics.stream()
             .map(String::trim)
             .filter(s -> !s.isEmpty())
             .distinct()
             .collect(Collectors.toList());
         try {
-            Files.write(questionTopicsFile, cleaned, StandardCharsets.UTF_8,
+            Files.write(file, cleaned, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
-            throw new RuntimeException("Unable to save question topics", e);
+            throw new RuntimeException("Unable to save question topics for " + type, e);
         }
     }
 

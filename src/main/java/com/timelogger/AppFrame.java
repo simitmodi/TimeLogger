@@ -4979,7 +4979,11 @@ public class AppFrame extends JFrame {
     }
 
     private void refreshQuestionTopicsDropdown() {
-        List<String> topics = storageService.loadQuestionTopics();
+        String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+        if (qType == null) {
+            qType = "DPP Questions";
+        }
+        List<String> topics = storageService.loadQuestionTopics(qType);
         
         // Remove selection listener temporarily to avoid trigger during model set
         java.awt.event.ActionListener[] listeners = stopwatchQuestionDescCombo.getActionListeners();
@@ -5001,6 +5005,8 @@ public class AppFrame extends JFrame {
     }
 
     private void saveCurrentQuestionTopics() {
+        String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+        if (qType == null) return;
         List<String> topics = new ArrayList<>();
         for (int i = 0; i < stopwatchQuestionDescCombo.getItemCount(); i++) {
             String item = stopwatchQuestionDescCombo.getItemAt(i);
@@ -5008,7 +5014,7 @@ public class AppFrame extends JFrame {
                 topics.add(item);
             }
         }
-        storageService.saveQuestionTopics(topics);
+        storageService.saveQuestionTopics(qType, topics);
     }
 
     private void revertQuestionDescSelection(String val) {
