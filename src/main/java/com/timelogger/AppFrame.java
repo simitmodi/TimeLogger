@@ -79,6 +79,8 @@ public class AppFrame extends JFrame {
     private final JLabel insightDetailEfficiency = new JLabel("-");
     private final JLabel insightDetailAttentionSpan = new JLabel("-");
     private final JLabel insightDetailFocusScore = new JLabel("-");
+    private final JLabel insightDetailTotalXp = new JLabel("-");
+    private final JLabel insightDetailAvgXp = new JLabel("-");
     private javax.swing.JCheckBox enableNotificationsCheckbox;
     private javax.swing.JCheckBox enableBreakRemindersCheckbox;
 
@@ -3482,6 +3484,8 @@ public class AppFrame extends JFrame {
         addDetailRow(detailsCard, "Study Session Efficiency:", insightDetailEfficiency, gbc, 5);
         addDetailRow(detailsCard, "Avg Attention Span:", insightDetailAttentionSpan, gbc, 6);
         addDetailRow(detailsCard, "Cognitive Focus Score:", insightDetailFocusScore, gbc, 7);
+        addDetailRow(detailsCard, "7-Day Accumulated XP:", insightDetailTotalXp, gbc, 8);
+        addDetailRow(detailsCard, "Average XP / Active Day:", insightDetailAvgXp, gbc, 9);
         
         middleRow.add(detailsCard);
 
@@ -3679,6 +3683,15 @@ public class AppFrame extends JFrame {
         insightDetailAttentionSpan.setText(!recentSessions.isEmpty() ? String.format("%.1f mins", avgAttentionSpanMin) : "-");
         insightDetailFocusScore.setText(focusText);
 
+        // Calculate XP metrics for the last 7 days
+        double recentXpGained = totalActiveSeconds / 60.0;
+        double recentXpDeducted = totalMidSessionBreaks / 60.0 * 0.25;
+        double recentNetXp = recentXpGained - recentXpDeducted;
+        double avgRecentXpPerDay = activeDaysCount > 0 ? recentNetXp / activeDaysCount : 0.0;
+
+        insightDetailTotalXp.setText(String.format("%.2f XP", recentNetXp));
+        insightDetailAvgXp.setText(String.format("%.2f XP/day", avgRecentXpPerDay));
+
         // Update Warnings & Recommendations
         warningsContainer.removeAll();
         boolean hasMessages = false;
@@ -3701,6 +3714,11 @@ public class AppFrame extends JFrame {
             }
             if (avgFocusScore < 60.0) {
                 addTipLabel("💡 Focus Tip: Fragmented study. Remove phone/tab distractions to stay in the zone.");
+                hasMessages = true;
+            }
+            double breakLossPct = recentXpGained > 0 ? (recentXpDeducted / recentXpGained) * 100.0 : 0.0;
+            if (breakLossPct > 20.0) {
+                addTipLabel(String.format("💡 XP Tip: High break deductions (%.1f%% of XP lost). Try to minimize pauses during active study blocks.", breakLossPct));
                 hasMessages = true;
             }
         }
@@ -4440,10 +4458,22 @@ public class AppFrame extends JFrame {
         String firstSessionDate = allSessions.isEmpty() ? "N/A" : allSessions.stream().map(SessionRecord::getStartTime).min(java.util.Comparator.naturalOrder()).get().toLocalDate().toString();
         String lastSessionDate = allSessions.isEmpty() ? "N/A" : allSessions.stream().map(SessionRecord::getStartTime).max(java.util.Comparator.naturalOrder()).get().toLocalDate().toString();
         List<String> subjects = storageService.loadSubjects();
+
+        long allTimeActiveSec = allSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
+        long allTimeSpanSec = 0;
+        for (SessionRecord s : allSessions) {
+            long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+            allTimeSpanSec += span;
+        }
+        long allTimeMidSessionBreaks = Math.max(0, allTimeSpanSec - allTimeActiveSec);
+        double allTimeXpGained = allTimeActiveSec / 60.0;
+        double allTimeXpDeducted = allTimeMidSessionBreaks / 60.0 * 0.25;
+        double allTimeNetXp = allTimeXpGained - allTimeXpDeducted;
         
         sb.append("### ALL-TIME SUMMARY & SYSTEM METRICS:\n");
         sb.append("- Total Logged Sessions (All-Time): ").append(allTimeSessions).append("\n");
         sb.append("- Total Tracked Hours (All-Time): ").append(String.format("%.2f hrs\n", allTimeHours));
+        sb.append("- Total Net XP (All-Time): ").append(String.format("%.2f XP (Gained: +%.2f, Deducted: -%.2f)\n", allTimeNetXp, allTimeXpGained, allTimeXpDeducted));
         sb.append("- Tracking Active Period: From ").append(firstSessionDate).append(" to ").append(lastSessionDate).append("\n");
         sb.append("- Configured Subject List: ").append(String.join(", ", subjects)).append("\n\n");
 
@@ -4510,16 +4540,29 @@ public class AppFrame extends JFrame {
         int prodIndex = (int) (goalAchievementRate * pacingFactor * 100.0);
         sb.append("- Productivity Index: ").append(prodIndex).append(" / 100\n");
         
+        long totalActiveSec = recentSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
         double avgAttentionSpanMin = 0;
         double avgFocusScore = 0;
         if (!recentSessions.isEmpty()) {
-            long totalActiveSec = recentSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
             long totalBlocks = recentSessions.stream().mapToLong(s -> getSessionPauseCount(s) + 1).sum();
             avgAttentionSpanMin = (totalActiveSec / (double) totalBlocks) / 60.0;
             avgFocusScore = recentSessions.stream().mapToInt(this::calculateSessionFocusScore).average().orElse(0.0);
         }
         sb.append("- Avg Attention Span: ").append(String.format("%.1f mins\n", avgAttentionSpanMin));
         sb.append("- Cognitive Focus Score: ").append(String.format("%.1f / 100\n", avgFocusScore));
+
+        long recentSpanSec = 0;
+        for (SessionRecord s : recentSessions) {
+            long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+            recentSpanSec += span;
+        }
+        long recentMidSessionBreaks = Math.max(0, recentSpanSec - totalActiveSec);
+        double recentXpGained = totalActiveSec / 60.0;
+        double recentXpDeducted = recentMidSessionBreaks / 60.0 * 0.25;
+        double recentNetXp = recentXpGained - recentXpDeducted;
+        double avgRecentXp = activeDates.size() > 0 ? recentNetXp / activeDates.size() : 0.0;
+        sb.append("- 7-Day Net XP: ").append(String.format("%.2f XP (Gained: +%.2f, Deducted: -%.2f)\n", recentNetXp, recentXpGained, recentXpDeducted));
+        sb.append("- Avg XP / Active Day: ").append(String.format("%.2f XP/day\n", avgRecentXp));
         
         // Subject Breakdown
         sb.append("\n### SUBJECT & CHAPTER BREAKDOWN (Last 7 Days):\n");
