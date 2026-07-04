@@ -1488,8 +1488,10 @@ public class AppFrame extends JFrame {
         long activeDaysCount = dailyNetXp.size();
         double avgXpPerDay = activeDaysCount > 0 ? totalNetXp / activeDaysCount : 0.0;
 
+        java.time.format.DateTimeFormatter xpJdFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+
         if (peakDate != null) {
-            xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: %.2f (%s)", avgXpPerDay, peakXp, peakDate.toString().substring(5)));
+            xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: %.2f (%s)", avgXpPerDay, peakXp, peakDate.format(xpJdFormatter)));
         } else {
             xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: -", avgXpPerDay));
         }
@@ -1505,8 +1507,11 @@ public class AppFrame extends JFrame {
                 double deducted = dailyDeductedXp.get(date);
                 double net = dailyNetXp.get(date);
 
+                String dayOfWeekName = date.getDayOfWeek().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault());
+                String dateStr = date.format(xpJdFormatter) + " (" + dayOfWeekName + ")";
+
                 dailyXpAnalysisModel.addRow(new Object[]{
-                    date.toString(),
+                    dateStr,
                     formatDuration(active),
                     formatDuration(breakS),
                     String.format("+%.2f", gained),
