@@ -4732,7 +4732,21 @@ public class AppFrame extends JFrame {
                             contentEnd = json.indexOf("\"", contentEnd + 1);
                         }
                         if (contentEnd != -1) {
-                            return "API Error: " + unescapeJson(json.substring(contentStart + 1, contentEnd));
+                            String errMsg = unescapeJson(json.substring(contentStart + 1, contentEnd));
+                            int rawIdx = json.indexOf("\"raw\"", errorIdx);
+                            if (rawIdx != -1) {
+                                int rawStart = json.indexOf("\"", rawIdx + 5);
+                                if (rawStart != -1) {
+                                    int rawEnd = json.indexOf("\"", rawStart + 1);
+                                    while (rawEnd != -1 && json.charAt(rawEnd - 1) == '\\') {
+                                        rawEnd = json.indexOf("\"", rawEnd + 1);
+                                    }
+                                    if (rawEnd != -1) {
+                                        errMsg = unescapeJson(json.substring(rawStart + 1, rawEnd));
+                                    }
+                                }
+                            }
+                            return "API Error: " + errMsg;
                         }
                     }
                 }
