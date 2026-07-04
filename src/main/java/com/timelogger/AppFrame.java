@@ -1279,12 +1279,14 @@ public class AppFrame extends JFrame {
         String period = (String) analysisPeriodCombo.getSelectedItem();
         if (period == null) period = "All Time";
         
+        java.time.format.DateTimeFormatter customLabelFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+
         if ("Custom Range...".equals(period)) {
             DateRange dr = promptDateRange("Select Analysis Date Range", LocalDate.now().minusDays(7), LocalDate.now());
             if (dr != null) {
                 customAnalysisStartDate = dr.startDate;
                 customAnalysisEndDate = dr.endDate;
-                String customLabel = "Custom: " + dr.startDate + " to " + dr.endDate;
+                String customLabel = "Custom: " + dr.startDate.format(customLabelFormatter) + " to " + dr.endDate.format(customLabelFormatter);
                 
                 // Temporarily disable action listener of combobox to avoid infinite loops
                 java.awt.event.ActionListener[] listeners = analysisPeriodCombo.getActionListeners();
@@ -1335,8 +1337,8 @@ public class AppFrame extends JFrame {
             try {
                 String datesPart = period.substring("Custom: ".length());
                 String[] parts = datesPart.split(" to ");
-                customAnalysisStartDate = LocalDate.parse(parts[0]);
-                customAnalysisEndDate = LocalDate.parse(parts[1]);
+                customAnalysisStartDate = LocalDate.parse(parts[0], customLabelFormatter);
+                customAnalysisEndDate = LocalDate.parse(parts[1], customLabelFormatter);
             } catch (Exception e) {
                 customAnalysisStartDate = null;
                 customAnalysisEndDate = null;
@@ -1531,7 +1533,7 @@ public class AppFrame extends JFrame {
             if (finalPeriod.equals("Yesterday")) {
                 labelPrefix = "Yesterday";
             } else if (finalPeriod.startsWith("Custom: ")) {
-                labelPrefix = singleDayTargetDate.toString();
+                labelPrefix = singleDayTargetDate.format(xpJdFormatter);
             }
 
             goalProgressLabel.setText(String.format("%s: %d / %d mins (%d%%)", 
@@ -1827,7 +1829,7 @@ public class AppFrame extends JFrame {
                 if (finalPeriod.equals("Yesterday")) {
                     titleDateStr = "Yesterday";
                 } else if (finalPeriod.startsWith("Custom: ")) {
-                    titleDateStr = singleDayTargetDate.toString();
+                    titleDateStr = singleDayTargetDate.format(xpJdFormatter);
                 }
 
                 if (titleDateStr.equals("Today")) {
@@ -2320,12 +2322,14 @@ public class AppFrame extends JFrame {
         String datePeriod = logsDateFilterCombo != null ? (String) logsDateFilterCombo.getSelectedItem() : "All Dates";
         if (datePeriod == null) datePeriod = "All Dates";
 
+        java.time.format.DateTimeFormatter customLabelFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+
         if ("Custom Range...".equals(datePeriod)) {
             DateRange dr = promptDateRange("Select Log Date Range", LocalDate.now().minusDays(7), LocalDate.now());
             if (dr != null) {
                 customLogsStartDate = dr.startDate;
                 customLogsEndDate = dr.endDate;
-                String customLabel = "Custom: " + dr.startDate + " to " + dr.endDate;
+                String customLabel = "Custom: " + dr.startDate.format(customLabelFormatter) + " to " + dr.endDate.format(customLabelFormatter);
                 
                 // Temporarily disable action listener of combobox to avoid infinite loops
                 java.awt.event.ActionListener[] listeners = logsDateFilterCombo.getActionListeners();
@@ -2375,8 +2379,8 @@ public class AppFrame extends JFrame {
             try {
                 String datesPart = datePeriod.substring("Custom: ".length());
                 String[] parts = datesPart.split(" to ");
-                customLogsStartDate = LocalDate.parse(parts[0]);
-                customLogsEndDate = LocalDate.parse(parts[1]);
+                customLogsStartDate = LocalDate.parse(parts[0], customLabelFormatter);
+                customLogsEndDate = LocalDate.parse(parts[1], customLabelFormatter);
             } catch (Exception e) {
                 customLogsStartDate = null;
                 customLogsEndDate = null;
@@ -2723,9 +2727,11 @@ public class AppFrame extends JFrame {
         JPanel panel = new JPanel(new GridLayout(1, 2, 20, 0));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
+        java.time.format.DateTimeFormatter dlgFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+
         JPanel startPanel = new JPanel(new BorderLayout(6, 6));
         startPanel.setOpaque(false);
-        JLabel startLabel = new JLabel("Start: " + defaultStart.toString(), SwingConstants.CENTER);
+        JLabel startLabel = new JLabel("Start: " + defaultStart.format(dlgFormatter), SwingConstants.CENTER);
         startLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
         startPanel.add(startLabel, BorderLayout.NORTH);
         
@@ -2734,20 +2740,20 @@ public class AppFrame extends JFrame {
 
         CalendarPanel startCalendar = new CalendarPanel(defaultStart, date -> {
             selectedStart[0] = date;
-            startLabel.setText("Start: " + date.toString());
+            startLabel.setText("Start: " + date.format(dlgFormatter));
         });
         startCalendar.setPreferredSize(new Dimension(280, 240));
         startPanel.add(startCalendar, BorderLayout.CENTER);
 
         JPanel endPanel = new JPanel(new BorderLayout(6, 6));
         endPanel.setOpaque(false);
-        JLabel endLabel = new JLabel("End: " + defaultEnd.toString(), SwingConstants.CENTER);
+        JLabel endLabel = new JLabel("End: " + defaultEnd.format(dlgFormatter), SwingConstants.CENTER);
         endLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
         endPanel.add(endLabel, BorderLayout.NORTH);
 
         CalendarPanel endCalendar = new CalendarPanel(defaultEnd, date -> {
             selectedEnd[0] = date;
-            endLabel.setText("End: " + date.toString());
+            endLabel.setText("End: " + date.format(dlgFormatter));
         });
         endCalendar.setPreferredSize(new Dimension(280, 240));
         endPanel.add(endCalendar, BorderLayout.CENTER);

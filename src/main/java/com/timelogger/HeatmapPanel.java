@@ -173,7 +173,7 @@ public class HeatmapPanel extends JPanel {
                     LocalDate cellDate = startDate.plusDays(col * 7 + row);
                     if (!cellDate.isAfter(today)) {
                         long seconds = dailyDurations.getOrDefault(cellDate, 0L);
-                        String formattedDate = cellDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d, yyyy"));
+                        String formattedDate = cellDate.format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.FULL));
                         String formattedDuration = formatDuration(seconds);
                         setToolTipText(formattedDate + ": " + formattedDuration + " tracked");
                         return;
