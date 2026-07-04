@@ -170,6 +170,18 @@ public class AppFrame extends JFrame {
 
     final JLabel totalSessionsValueLabel = new JLabel("-");
     final JLabel totalDurationValueLabel = new JLabel("-");
+    final JLabel xpValueLabel = new JLabel("-");
+    final JLabel xpBreakdownLabel = new JLabel("-");
+    final JLabel xpAnalyticsLabel = new JLabel("-");
+    final JLabel xpRateLabel = new JLabel("-");
+    final DefaultTableModel dailyXpAnalysisModel = new DefaultTableModel(
+        new Object[]{"Date", "Study Duration", "Break Duration", "XP Gained", "XP Deducted", "Net XP"}, 0
+    ) {
+        @Override
+        public boolean isCellEditable(int row, int col) {
+            return false;
+        }
+    };
     final DefaultTableModel subjectAnalysisModel = new DefaultTableModel(new Object[]{"Subject", "Duration"}, 0) {
         @Override
         public boolean isCellEditable(int row, int col) {
@@ -1143,6 +1155,30 @@ public class AppFrame extends JFrame {
         heatmapCard.setBorder(BorderFactory.createTitledBorder("Activity Heatmap"));
         heatmapCard.add(heatmapPanel, BorderLayout.CENTER);
 
+        JPanel xpCard = new JPanel(new java.awt.GridLayout(4, 1, 2, 2));
+        xpCard.setBorder(BorderFactory.createTitledBorder("Cognitive XP"));
+        xpValueLabel.setFont(new Font("SansSerif", Font.BOLD, 32));
+        xpValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        xpCard.add(xpValueLabel);
+        xpBreakdownLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        xpBreakdownLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        xpCard.add(xpBreakdownLabel);
+        xpAnalyticsLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        xpAnalyticsLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        xpCard.add(xpAnalyticsLabel);
+        xpRateLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        xpRateLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        xpRateLabel.setText("1 XP/min study | -0.25 XP/min break");
+        xpCard.add(xpRateLabel);
+
+        JTable dailyXpTable = new JTable(dailyXpAnalysisModel);
+        dailyXpTable.setRowHeight(24);
+        JPanel dailyXpCard = new JPanel(new BorderLayout(8, 8));
+        dailyXpCard.setBorder(BorderFactory.createTitledBorder("Daily XP Ledger & Comparison"));
+        JScrollPane dailyXpScroll = new JScrollPane(dailyXpTable);
+        dailyXpScroll.setPreferredSize(new Dimension(200, 180));
+        dailyXpCard.add(dailyXpScroll, BorderLayout.CENTER);
+
         // Bottom Controls
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         ModernButton exportAnalysisBtn = new ModernButton("Export Current View");
@@ -1161,7 +1197,7 @@ public class AppFrame extends JFrame {
         gbc.fill = GridBagConstraints.BOTH;
         gbc.insets = new java.awt.Insets(8, 8, 8, 8);
 
-        // Row 0: Goal, Sessions, Duration (all 1x1)
+        // Row 0: Goal, Sessions, Duration, XP (all 1x1)
         gbc.gridy = 0;
         gbc.weighty = 0.0;
 
@@ -1174,45 +1210,53 @@ public class AppFrame extends JFrame {
         gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 1; gbc.weightx = 1.0;
         mainContent.add(durationCard, gbc);
 
-        // Row 1: Pie Chart (starts Col 0, spans 1 Col and 2 Rows)
+        gbc.gridx = 3; gbc.gridwidth = 1; gbc.gridheight = 1; gbc.weightx = 1.0;
+        mainContent.add(xpCard, gbc);
+
+        // Row 1: Pie Chart (starts Col 0, spans 2 Cols and 2 Rows)
         gbc.gridy = 1;
-        gbc.gridx = 0; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        gbc.gridx = 0; gbc.gridwidth = 2; gbc.gridheight = 2; gbc.weightx = 2.0; gbc.weighty = 1.0;
         mainContent.add(chartCard, gbc);
 
-        // Row 1: By Subject (starts Col 1, spans 1 Col and 2 Rows)
-        gbc.gridx = 1; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        // Row 1: By Subject (starts Col 2, spans 1 Col and 2 Rows)
+        gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
         mainContent.add(subjectCard, gbc);
 
-        // Row 1: By Chapter (starts Col 2, spans 1 Col and 2 Rows)
-        gbc.gridx = 2; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
+        // Row 1: By Chapter (starts Col 3, spans 1 Col and 2 Rows)
+        gbc.gridx = 3; gbc.gridwidth = 1; gbc.gridheight = 2; gbc.weightx = 1.0; gbc.weighty = 1.0;
         mainContent.add(chapterCard, gbc);
 
-        // Row 3: By Activity, Questions Solved by Topic, Revision by Topic (all 1x1)
+        // Row 3: By Activity, Questions Solved by Topic, Revision by Topic (various gridwidths)
         gbc.gridy = 3; gbc.gridheight = 1; gbc.weighty = 0.5;
-        
+
         gbc.gridx = 0; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(activityCard, gbc);
 
-        gbc.gridx = 1; gbc.gridwidth = 1; gbc.weightx = 1.0;
+        gbc.gridx = 1; gbc.gridwidth = 2; gbc.weightx = 2.0;
         mainContent.add(questionsTopicCard, gbc);
 
-        gbc.gridx = 2; gbc.gridwidth = 1; gbc.weightx = 1.0;
+        gbc.gridx = 3; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(revisionCard, gbc);
 
-        // Row 4: By Day of Week (Spans all 3 columns, 1 row)
+        // Row 4: By Day of Week (Spans all 4 columns, 1 row)
         gbc.gridy = 4;
-        gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
+        gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(dayOfWeekCard, gbc);
 
-        // Row 5: Daily Session Timeline (Spans all 3 columns, 1 row)
+        // Row 5: Daily Session Timeline (Spans all 4 columns, 1 row)
         gbc.gridy = 5;
-        gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
+        gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(timelineCard, gbc);
 
-        // Row 6: Activity Heatmap (Spans all 3 columns, 1 row)
+        // Row 6: Activity Heatmap (Spans all 4 columns, 1 row)
         gbc.gridy = 6;
-        gbc.gridx = 0; gbc.gridwidth = 3; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
+        gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(heatmapCard, gbc);
+
+        // Row 7: Daily XP Ledger & Comparison (Spans all 4 columns, 1 row)
+        gbc.gridy = 7;
+        gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.5;
+        mainContent.add(dailyXpCard, gbc);
 
         // Wrap the bento grid in a scroll pane to support smaller screens
         JScrollPane scrollPane = new JScrollPane(mainContent);
@@ -1397,6 +1441,79 @@ public class AppFrame extends JFrame {
             midSessionBreakLabel.setText("Mid-Session Breaks: 00:00:00");
             studyEfficiencyLabel.setText("Study Efficiency: 100.0%");
         }
+
+        // XP Calculation
+        double totalXpGained = 0;
+        double totalXpDeducted = 0;
+        
+        java.util.Map<LocalDate, Double> dailyNetXp = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Double> dailyGainedXp = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Double> dailyDeductedXp = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Long> dailyActiveSec = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Long> dailyBreakSec = new java.util.HashMap<>();
+
+        for (SessionRecord s : sessions) {
+            LocalDate date = s.getStartTime().toLocalDate();
+            long active = s.getDurationSeconds();
+            long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+            long breakS = Math.max(0, span - active);
+
+            double gained = active / 60.0;
+            double deducted = breakS / 60.0 * 0.25;
+
+            totalXpGained += gained;
+            totalXpDeducted += deducted;
+
+            dailyActiveSec.put(date, dailyActiveSec.getOrDefault(date, 0L) + active);
+            dailyBreakSec.put(date, dailyBreakSec.getOrDefault(date, 0L) + breakS);
+            dailyGainedXp.put(date, dailyGainedXp.getOrDefault(date, 0.0) + gained);
+            dailyDeductedXp.put(date, dailyDeductedXp.getOrDefault(date, 0.0) + deducted);
+            dailyNetXp.put(date, dailyNetXp.getOrDefault(date, 0.0) + (gained - deducted));
+        }
+
+        double totalNetXp = totalXpGained - totalXpDeducted;
+        xpValueLabel.setText(String.format("%s%.2f XP", totalNetXp >= 0 ? "+" : "", totalNetXp));
+        xpBreakdownLabel.setText(String.format("Gained: +%.2f | Breaks: -%.2f", totalXpGained, totalXpDeducted));
+
+        // Calculate peak and average
+        double peakXp = 0;
+        LocalDate peakDate = null;
+        for (java.util.Map.Entry<LocalDate, Double> entry : dailyNetXp.entrySet()) {
+            if (entry.getValue() > peakXp) {
+                peakXp = entry.getValue();
+                peakDate = entry.getKey();
+            }
+        }
+
+        long activeDaysCount = dailyNetXp.size();
+        double avgXpPerDay = activeDaysCount > 0 ? totalNetXp / activeDaysCount : 0.0;
+
+        if (peakDate != null) {
+            xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: %.2f (%s)", avgXpPerDay, peakXp, peakDate.toString().substring(5)));
+        } else {
+            xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: -", avgXpPerDay));
+        }
+
+        // Populate Daily XP table
+        dailyXpAnalysisModel.setRowCount(0);
+        dailyNetXp.keySet().stream()
+            .sorted(java.util.Comparator.reverseOrder())
+            .forEach(date -> {
+                long active = dailyActiveSec.get(date);
+                long breakS = dailyBreakSec.get(date);
+                double gained = dailyGainedXp.get(date);
+                double deducted = dailyDeductedXp.get(date);
+                double net = dailyNetXp.get(date);
+
+                dailyXpAnalysisModel.addRow(new Object[]{
+                    date.toString(),
+                    formatDuration(active),
+                    formatDuration(breakS),
+                    String.format("+%.2f", gained),
+                    String.format("-%.2f", deducted),
+                    String.format("%s%.2f", net >= 0 ? "+" : "", net)
+                });
+            });
 
         // Goal & Streak update
 
