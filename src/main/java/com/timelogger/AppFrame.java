@@ -290,7 +290,9 @@ public class AppFrame extends JFrame {
         refreshQuestionTopicsDropdown();
         String initialQType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
         if (initialQType != null) {
-            String lastDesc = storageService.loadLastQuestionDesc(initialQType);
+            String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+            if (subject == null) subject = "";
+            String lastDesc = storageService.loadLastQuestionDesc(initialQType, subject);
             selectOrAddQuestionDesc(lastDesc);
         }
         refreshTimerSubjects();
@@ -604,7 +606,20 @@ public class AppFrame extends JFrame {
             String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
             if (qType != null) {
                 refreshQuestionTopicsDropdown();
-                String lastDesc = storageService.loadLastQuestionDesc(qType);
+                String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+                if (subject == null) subject = "";
+                String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
+                selectOrAddQuestionDesc(lastDesc);
+            }
+        });
+
+        stopwatchSubjectCombo.addActionListener(e -> {
+            String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+            if (qType != null) {
+                refreshQuestionTopicsDropdown();
+                String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+                if (subject == null) subject = "";
+                String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
                 selectOrAddQuestionDesc(lastDesc);
             }
         });
@@ -1962,7 +1977,9 @@ public class AppFrame extends JFrame {
             Object selectedObj = stopwatchQuestionDescCombo.getSelectedItem();
             String qDesc = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : ((String) selectedObj).trim();
             if (!qDesc.isEmpty() && qType != null) {
-                storageService.saveLastQuestionDesc(qType, qDesc);
+                String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+                if (subject == null) subject = "";
+                storageService.saveLastQuestionDesc(qType, subject, qDesc);
             }
             if ("Practice Book Questions".equals(qType) || "Previous Year Questions".equals(qType)) {
                 while (true) {
@@ -5169,7 +5186,11 @@ public class AppFrame extends JFrame {
         if (qType == null) {
             qType = "DPP Questions";
         }
-        List<String> topics = storageService.loadQuestionTopics(qType);
+        String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+        if (subject == null) {
+            subject = "";
+        }
+        List<String> topics = storageService.loadQuestionTopics(qType, subject);
         
         // Remove selection listener temporarily to avoid trigger during model set
         java.awt.event.ActionListener[] listeners = stopwatchQuestionDescCombo.getActionListeners();
@@ -5193,6 +5214,8 @@ public class AppFrame extends JFrame {
     private void saveCurrentQuestionTopics() {
         String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
         if (qType == null) return;
+        String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+        if (subject == null) return;
         List<String> topics = new ArrayList<>();
         for (int i = 0; i < stopwatchQuestionDescCombo.getItemCount(); i++) {
             String item = stopwatchQuestionDescCombo.getItemAt(i);
@@ -5200,7 +5223,7 @@ public class AppFrame extends JFrame {
                 topics.add(item);
             }
         }
-        storageService.saveQuestionTopics(qType, topics);
+        storageService.saveQuestionTopics(qType, subject, topics);
     }
 
     private void revertQuestionDescSelection(String val) {

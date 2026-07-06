@@ -322,24 +322,26 @@ public class StorageService {
         return appDirectory.resolve(filename);
     }
 
-    public List<String> extractQuestionTopicsFromLogs(String type) {
+    public List<String> extractQuestionTopicsFromLogs(String type, String subject) {
         List<String> topics = new ArrayList<>();
         List<SessionRecord> sessions = loadSessions();
         for (SessionRecord s : sessions) {
-            String desc = s.getDescription();
-            if (desc != null && desc.startsWith("Questions: ")) {
-                String content = desc.substring("Questions: ".length());
-                int commaIndex = content.indexOf(",");
-                if (commaIndex != -1) {
-                    String qType = content.substring(0, commaIndex).trim();
-                    if (qType.equals(type)) {
-                        String qDesc = content.substring(commaIndex + 1).trim();
-                        int solvedIdx = qDesc.indexOf(" (Solved:");
-                        if (solvedIdx != -1) {
-                            qDesc = qDesc.substring(0, solvedIdx).trim();
-                        }
-                        if (!qDesc.isEmpty() && !topics.contains(qDesc)) {
-                            topics.add(qDesc);
+            if (s.getSubject() != null && s.getSubject().equalsIgnoreCase(subject)) {
+                String desc = s.getDescription();
+                if (desc != null && desc.startsWith("Questions: ")) {
+                    String content = desc.substring("Questions: ".length());
+                    int commaIndex = content.indexOf(",");
+                    if (commaIndex != -1) {
+                        String qType = content.substring(0, commaIndex).trim();
+                        if (qType.equals(type)) {
+                            String qDesc = content.substring(commaIndex + 1).trim();
+                            int solvedIdx = qDesc.indexOf(" (Solved:");
+                            if (solvedIdx != -1) {
+                                qDesc = qDesc.substring(0, solvedIdx).trim();
+                            }
+                            if (!qDesc.isEmpty() && !topics.contains(qDesc)) {
+                                topics.add(qDesc);
+                            }
                         }
                     }
                 }
@@ -348,51 +350,96 @@ public class StorageService {
         return topics;
     }
 
-    public List<String> loadQuestionTopics(String type) {
+    public List<String> loadQuestionTopics(String type, String subject) {
         Path file = getQuestionTopicsFile(type);
         try {
-            List<String> topics = new ArrayList<>();
+            List<String> topicsForSubject = new ArrayList<>();
+            List<String> allLines = new ArrayList<>();
             if (Files.exists(file)) {
-                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-                for (String line : lines) {
-                    String trim = line.trim();
-                    if (!trim.isEmpty() && !topics.contains(trim)) {
-                        topics.add(trim);
-                    }
-                }
+                allLines = Files.readAllLines(file, StandardCharsets.UTF_8);
             } else {
-                topics.addAll(Arrays.asList("General", "Practice", "Revision"));
+                allLines.addAll(Arrays.asList("General", "Practice", "Revision"));
             }
 
-            List<String> logTopics = extractQuestionTopicsFromLogs(type);
+            for (String line : allLines) {
+                String trim = line.trim();
+                if (trim.isEmpty()) continue;
+                int colonIdx = trim.indexOf(":");
+                if (colonIdx != -1) {
+                    String sub = trim.substring(0, colonIdx).trim();
+                    String top = trim.substring(colonIdx + 1).trim();
+                    if (sub.equalsIgnoreCase(subject) && !topicsForSubject.contains(top)) {
+                        topicsForSubject.add(top);
+                    }
+                } else {
+                    // Legacy topic without subject - show for all subjects
+                    if (!topicsForSubject.contains(trim)) {
+                        topicsForSubject.add(trim);
+                    }
+                }
+            }
+
+            List<String> logTopics = extractQuestionTopicsFromLogs(type, subject);
             boolean changed = false;
             for (String lt : logTopics) {
                 boolean exists = false;
-                for (String t : topics) {
+                for (String t : topicsForSubject) {
                     if (t.equalsIgnoreCase(lt)) {
                         exists = true;
                         break;
                     }
                 }
                 if (!exists) {
-                    topics.add(lt);
+                    topicsForSubject.add(lt);
                     changed = true;
                 }
             }
 
             if (changed || !Files.exists(file)) {
-                saveQuestionTopics(type, topics);
+                saveQuestionTopics(type, subject, topicsForSubject);
             }
 
-            return topics;
+            return topicsForSubject;
         } catch (IOException e) {
             throw new RuntimeException("Unable to read question topics for " + type, e);
         }
     }
 
-    public void saveQuestionTopics(String type, List<String> topics) {
+    public void saveQuestionTopics(String type, String subject, List<String> topics) {
         Path file = getQuestionTopicsFile(type);
-        List<String> cleaned = topics.stream()
+        List<String> allLines = new ArrayList<>();
+        if (Files.exists(file)) {
+            try {
+                allLines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            } catch (IOException ignored) {}
+        }
+        
+        List<String> preservedLines = new ArrayList<>();
+        // Preserve all lines that are not for the current subject
+        for (String line : allLines) {
+            String trim = line.trim();
+            if (trim.isEmpty()) continue;
+            int colonIdx = trim.indexOf(":");
+            if (colonIdx != -1) {
+                String sub = trim.substring(0, colonIdx).trim();
+                if (!sub.equalsIgnoreCase(subject)) {
+                    preservedLines.add(trim);
+                }
+            } else {
+                // Keep legacy lines without a subject
+                preservedLines.add(trim);
+            }
+        }
+        
+        // Add new topics formatted as "Subject:Topic"
+        for (String top : topics) {
+            String cleanTop = top.trim();
+            if (!cleanTop.isEmpty()) {
+                preservedLines.add(subject + ":" + cleanTop);
+            }
+        }
+        
+        List<String> cleaned = preservedLines.stream()
             .map(String::trim)
             .filter(s -> !s.isEmpty())
             .distinct()
@@ -405,7 +452,7 @@ public class StorageService {
         }
     }
 
-    public String loadLastQuestionDesc(String type) {
+    public String loadLastQuestionDesc(String type, String subject) {
         Path file = appDirectory.resolve("last_question_descs.properties");
         if (!Files.exists(file)) {
             return "";
@@ -413,13 +460,17 @@ public class StorageService {
         java.util.Properties props = new java.util.Properties();
         try (java.io.Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             props.load(reader);
-            return props.getProperty(type, "");
+            String val = props.getProperty(type + "_" + subject, "");
+            if (val.isEmpty()) {
+                val = props.getProperty(type, ""); // fallback to legacy key
+            }
+            return val;
         } catch (Exception e) {
             return "";
         }
     }
 
-    public void saveLastQuestionDesc(String type, String desc) {
+    public void saveLastQuestionDesc(String type, String subject, String desc) {
         Path file = appDirectory.resolve("last_question_descs.properties");
         java.util.Properties props = new java.util.Properties();
         if (Files.exists(file)) {
@@ -427,7 +478,7 @@ public class StorageService {
                 props.load(reader);
             } catch (Exception ignored) {}
         }
-        props.setProperty(type, desc);
+        props.setProperty(type + "_" + subject, desc);
         try (java.io.Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             props.store(writer, null);
         } catch (Exception ignored) {}
