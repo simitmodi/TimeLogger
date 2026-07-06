@@ -228,6 +228,7 @@ public class AppFrame extends JFrame {
     private final JComboBox<String> analysisPeriodCombo = new JComboBox<>(new String[]{
         "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days", "Custom Range..."
     });
+    private JComboBox<String> questionsTopicFilterCombo;
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
     private final JLabel mostActiveSubjectLabel = new JLabel("Most Active: -", SwingConstants.CENTER);
@@ -1155,6 +1156,24 @@ public class AppFrame extends JFrame {
         questionsTopicTable.setRowHeight(24);
         JPanel questionsTopicCard = new JPanel(new BorderLayout(8, 8));
         questionsTopicCard.setBorder(BorderFactory.createTitledBorder("Questions Solved by Topic"));
+        
+        JPanel topicFilterPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
+        topicFilterPanel.setOpaque(false);
+        JLabel filterLbl = new JLabel("Filter:");
+        filterLbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        
+        questionsTopicFilterCombo = new JComboBox<>(new String[]{
+            "All (Practice & PYQ)",
+            "Practice Book",
+            "Previous Year"
+        });
+        questionsTopicFilterCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        questionsTopicFilterCombo.addActionListener(e -> refreshAnalysis());
+        
+        topicFilterPanel.add(filterLbl);
+        topicFilterPanel.add(questionsTopicFilterCombo);
+        questionsTopicCard.add(topicFilterPanel, BorderLayout.NORTH);
+        
         JScrollPane questionsTopicScroll = new JScrollPane(questionsTopicTable);
         questionsTopicScroll.setPreferredSize(new Dimension(200, 140));
         questionsTopicCard.add(questionsTopicScroll, BorderLayout.CENTER);
@@ -1692,6 +1711,12 @@ public class AppFrame extends JFrame {
         java.util.Map<String, Long> byQuestionTopicDuration = new java.util.HashMap<>();
         java.util.Map<String, Integer> byQuestionTopicSolved = new java.util.HashMap<>();
  
+        String topicFilter = "All (Practice & PYQ)";
+        if (questionsTopicFilterCombo != null) {
+            topicFilter = (String) questionsTopicFilterCombo.getSelectedItem();
+            if (topicFilter == null) topicFilter = "All (Practice & PYQ)";
+        }
+
         for (SessionRecord session : sessions) {
             String desc = session.getDescription() != null ? session.getDescription() : "";
             long sec = session.getDurationSeconds();
@@ -1710,22 +1735,33 @@ public class AppFrame extends JFrame {
                     generalSec += sec;
                 }
 
-                // Parse the topic (qDesc) from the description
-                String content = desc.substring("Questions: ".length());
-                int solvedIdx = content.indexOf(" (Solved:");
-                if (solvedIdx != -1) {
-                    content = content.substring(0, solvedIdx);
+                boolean includeTopic = false;
+                if ("All (Practice & PYQ)".equals(topicFilter)) {
+                    includeTopic = qType.startsWith("Practice Book Questions") || qType.startsWith("Previous Year Questions");
+                } else if ("Practice Book".equals(topicFilter)) {
+                    includeTopic = qType.startsWith("Practice Book Questions");
+                } else if ("Previous Year".equals(topicFilter)) {
+                    includeTopic = qType.startsWith("Previous Year Questions");
                 }
-                String qDesc = "";
-                int commaIdx = content.indexOf(',');
-                if (commaIdx != -1) {
-                    qDesc = content.substring(commaIdx + 1).trim();
+
+                if (includeTopic) {
+                    // Parse the topic (qDesc) from the description
+                    String content = desc.substring("Questions: ".length());
+                    int solvedIdx = content.indexOf(" (Solved:");
+                    if (solvedIdx != -1) {
+                        content = content.substring(0, solvedIdx);
+                    }
+                    String qDesc = "";
+                    int commaIdx = content.indexOf(',');
+                    if (commaIdx != -1) {
+                        qDesc = content.substring(commaIdx + 1).trim();
+                    }
+                    if (qDesc.isEmpty()) {
+                        qDesc = "General / Unnamed";
+                    }
+                    byQuestionTopicDuration.put(qDesc, byQuestionTopicDuration.getOrDefault(qDesc, 0L) + sec);
+                    byQuestionTopicSolved.put(qDesc, byQuestionTopicSolved.getOrDefault(qDesc, 0) + session.getQuestionsSolved());
                 }
-                if (qDesc.isEmpty()) {
-                    qDesc = "General / Unnamed";
-                }
-                byQuestionTopicDuration.put(qDesc, byQuestionTopicDuration.getOrDefault(qDesc, 0L) + sec);
-                byQuestionTopicSolved.put(qDesc, byQuestionTopicSolved.getOrDefault(qDesc, 0) + session.getQuestionsSolved());
             } else if (desc.startsWith("Revision: ")) {
                 String topic = desc.substring("Revision: ".length()).trim();
                 if (topic.isEmpty()) topic = "General/Unnamed";
