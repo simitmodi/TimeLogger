@@ -204,9 +204,87 @@ public class StorageService {
             }
 
             performAutoBackup();
+            migrateLegacyTopics();
         } catch (IOException e) {
             throw new RuntimeException("Unable to initialize storage", e);
         }
+    }
+
+    private void migrateLegacyTopics() {
+        migrateLegacyTopicsForType("DPP Questions");
+        migrateLegacyTopicsForType("Practice Book Questions");
+        migrateLegacyTopicsForType("Previous Year Questions");
+    }
+
+    private void migrateLegacyTopicsForType(String type) {
+        Path file = getQuestionTopicsFile(type);
+        if (!Files.exists(file)) return;
+        try {
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            List<String> newLines = new ArrayList<>();
+            boolean migrated = false;
+            
+            List<SessionRecord> sessions = loadSessions();
+            
+            for (String line : lines) {
+                String trim = line.trim();
+                if (trim.isEmpty()) continue;
+                
+                if (trim.contains(":")) {
+                    if (!newLines.contains(trim)) {
+                        newLines.add(trim);
+                    }
+                    continue;
+                }
+                
+                if (trim.equalsIgnoreCase("General") || trim.equalsIgnoreCase("Practice") || trim.equalsIgnoreCase("Revision")) {
+                    if (!newLines.contains(trim)) {
+                        newLines.add(trim);
+                    }
+                    continue;
+                }
+                
+                String mappedSubject = null;
+                for (SessionRecord s : sessions) {
+                    String desc = s.getDescription();
+                    if (desc != null && desc.startsWith("Questions: ")) {
+                        String content = desc.substring("Questions: ".length());
+                        int commaIndex = content.indexOf(",");
+                        if (commaIndex != -1) {
+                            String qType = content.substring(0, commaIndex).trim();
+                            if (qType.equals(type)) {
+                                String qDesc = content.substring(commaIndex + 1).trim();
+                                int solvedIdx = qDesc.indexOf(" (Solved:");
+                                if (solvedIdx != -1) {
+                                    qDesc = qDesc.substring(0, solvedIdx).trim();
+                                }
+                                if (qDesc.equalsIgnoreCase(trim)) {
+                                    mappedSubject = s.getSubject();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (mappedSubject != null) {
+                    String prefixed = mappedSubject + ":" + trim;
+                    if (!newLines.contains(prefixed)) {
+                        newLines.add(prefixed);
+                        migrated = true;
+                    }
+                } else {
+                    if (!newLines.contains(trim)) {
+                        newLines.add(trim);
+                    }
+                }
+            }
+            
+            if (migrated) {
+                Files.write(file, newLines, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        } catch (IOException ignored) {}
     }
 
     private void performAutoBackup() {
