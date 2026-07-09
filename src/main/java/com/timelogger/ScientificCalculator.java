@@ -22,7 +22,7 @@ public class ScientificCalculator extends JDialog {
     public ScientificCalculator(Frame owner) {
         super(owner, "Scientific Calculator", false);
         setUndecorated(true);
-        setSize(780, 520);
+        setSize(820, 540);
         setLocationRelativeTo(owner);
         
         // Root panel with border
@@ -380,12 +380,11 @@ public class ScientificCalculator extends JDialog {
         JButton addBtn = createStyledButton("+", new Color(240, 240, 240));
         gbc.gridx = 9; buttonsPanel.add(addBtn, gbc);
         
-        rootPanel.add(displayPanel, BorderLayout.CENTER);
-        
-        JPanel bottomContainer = new JPanel(new BorderLayout());
-        bottomContainer.setOpaque(false);
-        bottomContainer.add(buttonsPanel, BorderLayout.CENTER);
-        rootPanel.add(bottomContainer, BorderLayout.SOUTH);
+        JPanel contentPanel = new JPanel(new BorderLayout());
+        contentPanel.setOpaque(false);
+        contentPanel.add(displayPanel, BorderLayout.NORTH);
+        contentPanel.add(buttonsPanel, BorderLayout.CENTER);
+        rootPanel.add(contentPanel, BorderLayout.CENTER);
         
         setContentPane(rootPanel);
         
