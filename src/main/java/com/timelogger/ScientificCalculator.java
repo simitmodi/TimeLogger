@@ -448,7 +448,15 @@ public class ScientificCalculator extends JDialog {
         };
         btn.setContentAreaFilled(false);
         btn.setFocusPainted(false);
-        btn.setFont(new Font("SansSerif", Font.BOLD, 14));
+        int fontSize = 20;
+        if (text.length() > 4) {
+            fontSize = 13;
+        } else if (text.length() == 4) {
+            fontSize = 15;
+        } else if (text.length() == 3) {
+            fontSize = 17;
+        }
+        btn.setFont(new Font("SansSerif", Font.BOLD, fontSize));
         
         // Correct text visibility check
         if (bg.getRed() > 200 && bg.getGreen() < 100) { // Red buttons
