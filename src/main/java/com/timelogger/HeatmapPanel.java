@@ -48,18 +48,7 @@ public class HeatmapPanel extends JPanel {
 
     private GridConfig getGridConfig(int availableWidth, int cellSpace) {
         LocalDate today = LocalDate.now();
-        LocalDate earliestDate = dailyDurations.keySet().stream()
-            .filter(d -> dailyDurations.get(d) > 0)
-            .min(LocalDate::compareTo)
-            .orElse(today);
-
-        LocalDate firstWeekSunday = earliestDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-        LocalDate lastWeekSunday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
-
-        int loggedWeeks = (int) (ChronoUnit.DAYS.between(firstWeekSunday, lastWeekSunday) / 7) + 1;
-        int maxWeeksThatFit = availableWidth / cellSpace;
-        
-        int numWeeks = Math.min(maxWeeksThatFit, Math.max(9, loggedWeeks));
+        int numWeeks = 9; // strictly 2 months (9 weeks) max
         LocalDate startDate = today.minusDays((numWeeks - 1) * 7).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
         return new GridConfig(numWeeks, startDate);
     }
