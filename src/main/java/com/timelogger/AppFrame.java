@@ -230,6 +230,7 @@ public class AppFrame extends JFrame {
         "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days", "Custom Range..."
     });
     private JComboBox<String> questionsTopicFilterCombo;
+    private ScientificCalculator scientificCalculator;
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
     private final JLabel mostActiveSubjectLabel = new JLabel("Most Active: -", SwingConstants.CENTER);
@@ -319,6 +320,14 @@ public class AppFrame extends JFrame {
             } else if (selectedIdx == tabs.indexOfTab("AI Assistant")) {
                 showChatInterface();
             }
+            
+            if (selectedIdx != tabs.indexOfTab("Stopwatch")) {
+                if (scientificCalculator != null && scientificCalculator.isVisible()) {
+                    scientificCalculator.setVisible(false);
+                }
+            } else {
+                updateCalculatorVisibility();
+            }
         });
 
         // Minimize memory footprint when minimized (normal taskbar behavior, no hide)
@@ -340,8 +349,23 @@ public class AppFrame extends JFrame {
             public void windowClosing(java.awt.event.WindowEvent e) {
                 saveChatHistory();
                 cleanupSystemTray();
+                if (scientificCalculator != null) {
+                    scientificCalculator.dispose();
+                }
+            }
+            @Override
+            public void windowIconified(java.awt.event.WindowEvent e) {
+                if (scientificCalculator != null && scientificCalculator.isVisible()) {
+                    scientificCalculator.setVisible(false);
+                }
+            }
+            @Override
+            public void windowDeiconified(java.awt.event.WindowEvent e) {
+                updateCalculatorVisibility();
             }
         });
+        
+        updateCalculatorVisibility();
     }
 
     private void applyFontToContainer(java.awt.Container container, Font labelFont, Font controlFont) {
@@ -569,6 +593,7 @@ public class AppFrame extends JFrame {
             stopwatchActivitySubPanel.repaint();
             config.revalidate();
             config.repaint();
+            updateCalculatorVisibility();
         });
 
         final String[] lastSelectedDesc = {null};
@@ -612,6 +637,7 @@ public class AppFrame extends JFrame {
                 if (subject == null) subject = "";
                 String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
                 selectOrAddQuestionDesc(lastDesc);
+                updateCalculatorVisibility();
             }
         });
 
@@ -5351,5 +5377,24 @@ public class AppFrame extends JFrame {
         }
     }
 
+    private void updateCalculatorVisibility() {
+        String activityType = (String) stopwatchActivityTypeCombo.getSelectedItem();
+        String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+        boolean shouldShow = "Questions".equals(activityType) && 
+                            ("Practice Book Questions".equals(qType) || "Previous Year Questions".equals(qType));
+        
+        if (shouldShow) {
+            if (scientificCalculator == null) {
+                scientificCalculator = new ScientificCalculator(this);
+            }
+            if (!scientificCalculator.isVisible()) {
+                scientificCalculator.setVisible(true);
+            }
+        } else {
+            if (scientificCalculator != null && scientificCalculator.isVisible()) {
+                scientificCalculator.setVisible(false);
+            }
+        }
+    }
 }
 
