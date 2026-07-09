@@ -22,7 +22,7 @@ public class ScientificCalculator extends JDialog {
     public ScientificCalculator(Frame owner) {
         super(owner, "Scientific Calculator", false);
         setUndecorated(true);
-        setSize(650, 480);
+        setSize(780, 520);
         setLocationRelativeTo(owner);
         
         // Root panel with border
@@ -104,7 +104,7 @@ public class ScientificCalculator extends JDialog {
         historyField.setEditable(false);
         historyField.setFocusable(false);
         historyField.setHorizontalAlignment(JTextField.RIGHT);
-        historyField.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        historyField.setFont(new Font("Monospaced", Font.PLAIN, 18));
         historyField.setBackground(Color.WHITE);
         historyField.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(Color.GRAY),
@@ -116,7 +116,7 @@ public class ScientificCalculator extends JDialog {
         displayField.setEditable(false);
         displayField.setFocusable(false);
         displayField.setHorizontalAlignment(JTextField.RIGHT);
-        displayField.setFont(new Font("Monospaced", Font.BOLD, 22));
+        displayField.setFont(new Font("Monospaced", Font.BOLD, 28));
         displayField.setBackground(Color.WHITE);
         displayField.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(Color.GRAY),
@@ -344,7 +344,7 @@ public class ScientificCalculator extends JDialog {
         // Equals button (spans 2 rows)
         JButton eqBtn = createStyledButton("=", new Color(46, 125, 50)); // Green
         eqBtn.setForeground(Color.WHITE);
-        eqBtn.setFont(new Font("SansSerif", Font.BOLD, 22));
+        eqBtn.setFont(new Font("SansSerif", Font.BOLD, 26));
         gbc.gridx = 10; gbc.gridheight = 2;
         buttonsPanel.add(eqBtn, gbc);
         
@@ -408,7 +408,7 @@ public class ScientificCalculator extends JDialog {
 
     private JButton createStyledButton(String text, Color bg) {
         JButton btn = new JButton(text);
-        btn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btn.setFont(new Font("SansSerif", Font.BOLD, 14));
         btn.setFocusPainted(false);
         btn.setBackground(bg);
         btn.setForeground(new Color(33, 33, 33));

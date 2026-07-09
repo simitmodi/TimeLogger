@@ -115,6 +115,7 @@ public class AppFrame extends JFrame {
         "DPP Questions", "Practice Book Questions", "Previous Year Questions"
     });
     final JComboBox<String> stopwatchQuestionDescCombo = new JComboBox<>();
+    private JButton stopwatchCalcBtn;
     final JTextField stopwatchChapterField = new JTextField(5);
     final JTextField stopwatchLectureField = new JTextField(5);
     final JTextField stopwatchRevisionTopicField = new JTextField(20);
@@ -569,6 +570,16 @@ public class AppFrame extends JFrame {
         questionsCard.add(stopwatchQuestionTypeCombo);
         questionsCard.add(new JLabel(" Desc: "));
         questionsCard.add(stopwatchQuestionDescCombo);
+        
+        stopwatchCalcBtn = new JButton("🧮 Calculator");
+        stopwatchCalcBtn.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        stopwatchCalcBtn.addActionListener(e -> {
+            if (scientificCalculator == null) {
+                scientificCalculator = new ScientificCalculator(this);
+            }
+            scientificCalculator.setVisible(true);
+        });
+        questionsCard.add(stopwatchCalcBtn);
 
         JPanel lectureCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         lectureCard.add(new JLabel("Ch No: "));
@@ -5383,6 +5394,10 @@ public class AppFrame extends JFrame {
         boolean shouldShow = "Questions".equals(activityType) && 
                             ("Practice Book Questions".equals(qType) || "Previous Year Questions".equals(qType));
         
+        if (stopwatchCalcBtn != null) {
+            stopwatchCalcBtn.setVisible(shouldShow);
+        }
+
         if (shouldShow) {
             if (scientificCalculator == null) {
                 scientificCalculator = new ScientificCalculator(this);
