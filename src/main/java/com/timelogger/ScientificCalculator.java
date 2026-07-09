@@ -698,9 +698,11 @@ public class ScientificCalculator extends JDialog {
             if (cmd.equals("ʸ√x")) op = "yroot";
             if (cmd.equals("mod")) op = "%";
             
-            if (history.isEmpty()) {
+            boolean endsWithOp = history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot");
+            
+            if (history.isEmpty() || !endsWithOp) {
                 historyField.setText(current + " " + op);
-            } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot")) {
+            } else {
                 // Replace last operator
                 int lastSpace = history.lastIndexOf(' ');
                 if (lastSpace != -1) {
@@ -708,18 +710,26 @@ public class ScientificCalculator extends JDialog {
                 } else {
                     historyField.setText(current + " " + op);
                 }
-            } else {
-                historyField.setText(history + " " + op);
             }
             isFreshInput = true;
-        } else if (cmd.equals("π")) {
-            displayField.setText(formatResult(Math.PI));
-            isFreshInput = true;
-        } else if (cmd.equals("e")) {
-            displayField.setText(formatResult(Math.E));
+        } else if (cmd.equals("π") || cmd.equals("e")) {
+            boolean endsWithOp = history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot");
+            if (!history.isEmpty() && !endsWithOp) {
+                historyField.setText("");
+            }
+            double val = cmd.equals("π") ? Math.PI : Math.E;
+            displayField.setText(formatResult(val));
             isFreshInput = true;
         } else {
             // Digits, decimal point, parentheses
+            boolean endsWithOp = history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot");
+            if (!history.isEmpty() && !endsWithOp) {
+                if (cmd.equals("(") || (!cmd.equals(")") && isFreshInput)) {
+                    historyField.setText("");
+                    history = "";
+                }
+            }
+            
             if (cmd.equals("(") || cmd.equals(")")) {
                 if (cmd.equals("(")) {
                     if (history.isEmpty()) {
