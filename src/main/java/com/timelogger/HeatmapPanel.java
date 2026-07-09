@@ -36,6 +36,34 @@ public class HeatmapPanel extends JPanel {
         repaint();
     }
 
+    private static class GridConfig {
+        final int numWeeks;
+        final LocalDate startDate;
+
+        GridConfig(int numWeeks, LocalDate startDate) {
+            this.numWeeks = numWeeks;
+            this.startDate = startDate;
+        }
+    }
+
+    private GridConfig getGridConfig(int availableWidth, int cellSpace) {
+        LocalDate today = LocalDate.now();
+        LocalDate earliestDate = dailyDurations.keySet().stream()
+            .filter(d -> dailyDurations.get(d) > 0)
+            .min(LocalDate::compareTo)
+            .orElse(today);
+
+        LocalDate firstWeekSunday = earliestDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        LocalDate lastWeekSunday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+
+        int loggedWeeks = (int) (ChronoUnit.DAYS.between(firstWeekSunday, lastWeekSunday) / 7) + 1;
+        int maxWeeksThatFit = availableWidth / cellSpace;
+        
+        int numWeeks = Math.min(maxWeeksThatFit, Math.max(9, loggedWeeks));
+        LocalDate startDate = today.minusDays((numWeeks - 1) * 7).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        return new GridConfig(numWeeks, startDate);
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -58,12 +86,9 @@ public class HeatmapPanel extends JPanel {
 
         LocalDate today = LocalDate.now();
         int availableWidth = getWidth() - leftMargin - 20;
-        int numWeeks = availableWidth / cellSpace;
-        if (numWeeks < 9) {
-            numWeeks = 9;
-        }
-
-        LocalDate startDate = today.minusDays((numWeeks - 1) * 7).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        GridConfig config = getGridConfig(availableWidth, cellSpace);
+        int numWeeks = config.numWeeks;
+        LocalDate startDate = config.startDate;
 
         // 1. Draw Month Labels
         g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
@@ -157,12 +182,9 @@ public class HeatmapPanel extends JPanel {
 
         LocalDate today = LocalDate.now();
         int availableWidth = getWidth() - leftMargin - 20;
-        int numWeeks = availableWidth / cellSpace;
-        if (numWeeks < 9) {
-            numWeeks = 9;
-        }
-
-        LocalDate startDate = today.minusDays((numWeeks - 1) * 7).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        GridConfig config = getGridConfig(availableWidth, cellSpace);
+        int numWeeks = config.numWeeks;
+        LocalDate startDate = config.startDate;
 
         for (int col = 0; col < numWeeks; col++) {
             for (int row = 0; row < 7; row++) {
