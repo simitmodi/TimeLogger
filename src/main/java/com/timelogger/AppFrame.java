@@ -171,6 +171,7 @@ public class AppFrame extends JFrame {
     private final JLabel exportInfoLabel = new JLabel();
 
     final JLabel totalSessionsValueLabel = new JLabel("-");
+    private JComboBox<String> sessionsFilterCombo;
     final JLabel totalDurationValueLabel = new JLabel("-");
     final JLabel xpValueLabel = new JLabel("-");
     final JLabel xpBreakdownLabel = new JLabel("-");
@@ -1089,17 +1090,34 @@ public class AppFrame extends JFrame {
         goalCard.add(progressPanel);
         goalCard.add(streakLabel);
         
-        JPanel sessionsCard = new JPanel(new java.awt.GridLayout(3, 1, 4, 4));
+        JPanel sessionsCard = new JPanel(new BorderLayout(4, 4));
         sessionsCard.setBorder(BorderFactory.createTitledBorder("Total Sessions"));
-        totalSessionsValueLabel.setFont(new Font("SansSerif", Font.BOLD, 36));
+        
+        sessionsFilterCombo = new JComboBox<>(new String[]{"All", "General", "Revision", "Questions", "Lecture"});
+        sessionsFilterCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        sessionsFilterCombo.addActionListener(e -> refreshAnalysis());
+        
+        JPanel filterComboPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        filterComboPanel.setOpaque(false);
+        filterComboPanel.add(sessionsFilterCombo);
+        sessionsCard.add(filterComboPanel, BorderLayout.NORTH);
+        
+        JPanel sessionsStatsPanel = new JPanel(new java.awt.GridLayout(3, 1, 2, 2));
+        sessionsStatsPanel.setOpaque(false);
+        
+        totalSessionsValueLabel.setFont(new Font("SansSerif", Font.BOLD, 32));
         totalSessionsValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        sessionsCard.add(totalSessionsValueLabel);
-        avgSessionLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        sessionsStatsPanel.add(totalSessionsValueLabel);
+        
+        avgSessionLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         avgSessionLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        sessionsCard.add(avgSessionLabel);
-        studyEfficiencyLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        sessionsStatsPanel.add(avgSessionLabel);
+        
+        studyEfficiencyLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         studyEfficiencyLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        sessionsCard.add(studyEfficiencyLabel);
+        sessionsStatsPanel.add(studyEfficiencyLabel);
+        
+        sessionsCard.add(sessionsStatsPanel, BorderLayout.CENTER);
         
         JPanel durationCard = new JPanel(new java.awt.GridLayout(4, 1, 2, 2));
         durationCard.setBorder(BorderFactory.createTitledBorder("Total Duration"));
@@ -1440,17 +1458,49 @@ public class AppFrame extends JFrame {
         int totalSessions = sessions.size();
         long totalSeconds = sessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
         
-        totalSessionsValueLabel.setText(String.valueOf(totalSessions));
         totalDurationValueLabel.setText(formatDuration(totalSeconds));
 
-        // Average session duration
-        if (totalSessions > 0) {
-            avgSessionLabel.setText("Avg Duration: " + formatDuration(totalSeconds / totalSessions));
+        // Total Sessions card calculations (filtered by sessionsFilterCombo)
+        String sessionTypeFilter = "All";
+        if (sessionsFilterCombo != null) {
+            sessionTypeFilter = (String) sessionsFilterCombo.getSelectedItem();
+            if (sessionTypeFilter == null) sessionTypeFilter = "All";
+        }
+        
+        final String finalTypeFilter = sessionTypeFilter;
+        List<SessionRecord> cardSessions = sessions.stream()
+            .filter(s -> {
+                String desc = s.getDescription() != null ? s.getDescription() : "";
+                if ("All".equals(finalTypeFilter)) return true;
+                if ("Questions".equals(finalTypeFilter)) return desc.startsWith("Questions: ");
+                if ("Revision".equals(finalTypeFilter)) return desc.startsWith("Revision: ");
+                if ("Lecture".equals(finalTypeFilter)) return desc.startsWith("Lecture: ");
+                if ("General".equals(finalTypeFilter)) {
+                    return !desc.startsWith("Questions: ") && !desc.startsWith("Revision: ") && !desc.startsWith("Lecture: ");
+                }
+                return true;
+            })
+            .collect(Collectors.toList());
+
+        int totalCardSessions = cardSessions.size();
+        long totalCardSeconds = cardSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
+        long totalCardSpanSeconds = 0;
+        for (SessionRecord s : cardSessions) {
+            long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
+            totalCardSpanSeconds += span;
+        }
+        double cardEfficiency = totalCardSpanSeconds > 0 ? ((double) totalCardSeconds / totalCardSpanSeconds) * 100.0 : 100.0;
+
+        totalSessionsValueLabel.setText(String.valueOf(totalCardSessions));
+        if (totalCardSessions > 0) {
+            avgSessionLabel.setText("Avg Duration: " + formatDuration(totalCardSeconds / totalCardSessions));
+            studyEfficiencyLabel.setText(String.format("Study Efficiency: %.1f%%", cardEfficiency));
         } else {
             avgSessionLabel.setText("Avg Duration: 00:00:00");
+            studyEfficiencyLabel.setText("Study Efficiency: 100.0%");
         }
 
-        // Active day average
+        // Active day average (overall)
         long uniqueDays = sessions.stream()
             .map(s -> s.getStartTime().toLocalDate())
             .distinct()
@@ -1461,7 +1511,7 @@ public class AppFrame extends JFrame {
             activeDayAvgLabel.setText("Active Day Avg: 00:00:00");
         }
 
-        // Mid-session breaks & study efficiency
+        // Mid-session breaks (overall)
         long totalSpanSeconds = 0;
         long totalActiveSeconds = 0;
         for (SessionRecord s : sessions) {
@@ -1470,14 +1520,11 @@ public class AppFrame extends JFrame {
             totalActiveSeconds += s.getDurationSeconds();
         }
         long totalMidSessionBreaks = Math.max(0, totalSpanSeconds - totalActiveSeconds);
-        double efficiency = totalSpanSeconds > 0 ? ((double) totalActiveSeconds / totalSpanSeconds) * 100.0 : 100.0;
 
         if (totalSessions > 0) {
             midSessionBreakLabel.setText(String.format("Mid-Session Breaks: %s", formatDuration(totalMidSessionBreaks)));
-            studyEfficiencyLabel.setText(String.format("Study Efficiency: %.1f%%", efficiency));
         } else {
             midSessionBreakLabel.setText("Mid-Session Breaks: 00:00:00");
-            studyEfficiencyLabel.setText("Study Efficiency: 100.0%");
         }
 
         // XP Calculation
