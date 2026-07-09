@@ -1481,12 +1481,12 @@ public class AppFrame extends JFrame {
         }
 
         // XP Calculation
-        double totalXpGained = 0;
-        double totalXpDeducted = 0;
+        int totalXpGained = 0;
+        int totalXpDeducted = 0;
         
-        java.util.Map<LocalDate, Double> dailyNetXp = new java.util.HashMap<>();
-        java.util.Map<LocalDate, Double> dailyGainedXp = new java.util.HashMap<>();
-        java.util.Map<LocalDate, Double> dailyDeductedXp = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Integer> dailyNetXp = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Integer> dailyGainedXp = new java.util.HashMap<>();
+        java.util.Map<LocalDate, Integer> dailyDeductedXp = new java.util.HashMap<>();
         java.util.Map<LocalDate, Long> dailyActiveSec = new java.util.HashMap<>();
         java.util.Map<LocalDate, Long> dailyBreakSec = new java.util.HashMap<>();
 
@@ -1496,42 +1496,49 @@ public class AppFrame extends JFrame {
             long span = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
             long breakS = Math.max(0, span - active);
 
-            double gained = active / 60.0;
-            double deducted = breakS / 60.0 * 0.25;
+            dailyActiveSec.put(date, dailyActiveSec.getOrDefault(date, 0L) + active);
+            dailyBreakSec.put(date, dailyBreakSec.getOrDefault(date, 0L) + breakS);
+        }
+
+        for (LocalDate date : dailyActiveSec.keySet()) {
+            long activeSec = dailyActiveSec.get(date);
+            long breakSec = dailyBreakSec.get(date);
+
+            int gained = (int) Math.round(activeSec / 60.0);
+            int deducted = (int) Math.round(breakSec / 60.0 * 0.25);
+            int net = gained - deducted;
+
+            dailyGainedXp.put(date, gained);
+            dailyDeductedXp.put(date, deducted);
+            dailyNetXp.put(date, net);
 
             totalXpGained += gained;
             totalXpDeducted += deducted;
-
-            dailyActiveSec.put(date, dailyActiveSec.getOrDefault(date, 0L) + active);
-            dailyBreakSec.put(date, dailyBreakSec.getOrDefault(date, 0L) + breakS);
-            dailyGainedXp.put(date, dailyGainedXp.getOrDefault(date, 0.0) + gained);
-            dailyDeductedXp.put(date, dailyDeductedXp.getOrDefault(date, 0.0) + deducted);
-            dailyNetXp.put(date, dailyNetXp.getOrDefault(date, 0.0) + (gained - deducted));
         }
 
-        double totalNetXp = totalXpGained - totalXpDeducted;
-        xpValueLabel.setText(String.format("%s%.2f XP", totalNetXp >= 0 ? "+" : "", totalNetXp));
-        xpBreakdownLabel.setText(String.format("Gained: +%.2f | Breaks: -%.2f", totalXpGained, totalXpDeducted));
+        int totalNetXp = totalXpGained - totalXpDeducted;
+        xpValueLabel.setText(String.format("%s%d XP", totalNetXp >= 0 ? "+" : "", totalNetXp));
+        xpBreakdownLabel.setText(String.format("Gained: +%d | Breaks: -%d", totalXpGained, totalXpDeducted));
 
         // Calculate peak and average
-        double peakXp = 0;
+        int peakXp = 0;
         LocalDate peakDate = null;
-        for (java.util.Map.Entry<LocalDate, Double> entry : dailyNetXp.entrySet()) {
-            if (entry.getValue() > peakXp) {
+        for (java.util.Map.Entry<LocalDate, Integer> entry : dailyNetXp.entrySet()) {
+            if (peakDate == null || entry.getValue() > peakXp) {
                 peakXp = entry.getValue();
                 peakDate = entry.getKey();
             }
         }
 
         long activeDaysCount = dailyNetXp.size();
-        double avgXpPerDay = activeDaysCount > 0 ? totalNetXp / activeDaysCount : 0.0;
+        double avgXpPerDay = activeDaysCount > 0 ? (double) totalNetXp / activeDaysCount : 0.0;
 
         java.time.format.DateTimeFormatter xpJdFormatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
 
         if (peakDate != null) {
-            xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: %.2f (%s)", avgXpPerDay, peakXp, peakDate.format(xpJdFormatter)));
+            xpAnalyticsLabel.setText(String.format("Avg: %.1f/day | Peak: %d (%s)", avgXpPerDay, peakXp, peakDate.format(xpJdFormatter)));
         } else {
-            xpAnalyticsLabel.setText(String.format("Avg: %.2f/day | Peak: -", avgXpPerDay));
+            xpAnalyticsLabel.setText(String.format("Avg: %.1f/day | Peak: -", avgXpPerDay));
         }
 
         // Populate Daily XP table
@@ -1541,9 +1548,9 @@ public class AppFrame extends JFrame {
             .forEach(date -> {
                 long active = dailyActiveSec.get(date);
                 long breakS = dailyBreakSec.get(date);
-                double gained = dailyGainedXp.get(date);
-                double deducted = dailyDeductedXp.get(date);
-                double net = dailyNetXp.get(date);
+                int gained = dailyGainedXp.get(date);
+                int deducted = dailyDeductedXp.get(date);
+                int net = dailyNetXp.get(date);
 
                 String dayOfWeekName = date.getDayOfWeek().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault());
                 String dateStr = date.format(xpJdFormatter) + " (" + dayOfWeekName + ")";
@@ -1552,9 +1559,9 @@ public class AppFrame extends JFrame {
                     dateStr,
                     formatDuration(active),
                     formatDuration(breakS),
-                    String.format("+%.2f", gained),
-                    String.format("-%.2f", deducted),
-                    String.format("%s%.2f", net >= 0 ? "+" : "", net)
+                    String.format("+%d", gained),
+                    String.format("-%d", deducted),
+                    String.format("%s%d", net >= 0 ? "+" : "", net)
                 });
             });
 
@@ -3737,13 +3744,13 @@ public class AppFrame extends JFrame {
         insightDetailFocusScore.setText(focusText);
 
         // Calculate XP metrics for the last 7 days
-        double recentXpGained = totalActiveSeconds / 60.0;
-        double recentXpDeducted = totalMidSessionBreaks / 60.0 * 0.25;
-        double recentNetXp = recentXpGained - recentXpDeducted;
-        double avgRecentXpPerDay = activeDaysCount > 0 ? recentNetXp / activeDaysCount : 0.0;
+        int recentXpGained = (int) Math.round(totalActiveSeconds / 60.0);
+        int recentXpDeducted = (int) Math.round(totalMidSessionBreaks / 60.0 * 0.25);
+        int recentNetXp = recentXpGained - recentXpDeducted;
+        double avgRecentXpPerDay = activeDaysCount > 0 ? (double) recentNetXp / activeDaysCount : 0.0;
 
-        insightDetailTotalXp.setText(String.format("%.2f XP", recentNetXp));
-        insightDetailAvgXp.setText(String.format("%.2f XP/day", avgRecentXpPerDay));
+        insightDetailTotalXp.setText(recentNetXp + " XP");
+        insightDetailAvgXp.setText(String.format("%.1f XP/day", avgRecentXpPerDay));
 
         // Update Warnings & Recommendations
         warningsContainer.removeAll();
@@ -3769,7 +3776,7 @@ public class AppFrame extends JFrame {
                 addTipLabel("💡 Focus Tip: Fragmented study. Remove phone/tab distractions to stay in the zone.");
                 hasMessages = true;
             }
-            double breakLossPct = recentXpGained > 0 ? (recentXpDeducted / recentXpGained) * 100.0 : 0.0;
+            double breakLossPct = recentXpGained > 0 ? ((double) recentXpDeducted / recentXpGained) * 100.0 : 0.0;
             if (breakLossPct > 20.0) {
                 addTipLabel(String.format("💡 XP Tip: High break deductions (%.1f%% of XP lost). Try to minimize pauses during active study blocks.", breakLossPct));
                 hasMessages = true;
@@ -4519,14 +4526,14 @@ public class AppFrame extends JFrame {
             allTimeSpanSec += span;
         }
         long allTimeMidSessionBreaks = Math.max(0, allTimeSpanSec - allTimeActiveSec);
-        double allTimeXpGained = allTimeActiveSec / 60.0;
-        double allTimeXpDeducted = allTimeMidSessionBreaks / 60.0 * 0.25;
-        double allTimeNetXp = allTimeXpGained - allTimeXpDeducted;
+        int allTimeXpGained = (int) Math.round(allTimeActiveSec / 60.0);
+        int allTimeXpDeducted = (int) Math.round(allTimeMidSessionBreaks / 60.0 * 0.25);
+        int allTimeNetXp = allTimeXpGained - allTimeXpDeducted;
         
         sb.append("### ALL-TIME SUMMARY & SYSTEM METRICS:\n");
         sb.append("- Total Logged Sessions (All-Time): ").append(allTimeSessions).append("\n");
         sb.append("- Total Tracked Hours (All-Time): ").append(String.format("%.2f hrs\n", allTimeHours));
-        sb.append("- Total Net XP (All-Time): ").append(String.format("%.2f XP (Gained: +%.2f, Deducted: -%.2f)\n", allTimeNetXp, allTimeXpGained, allTimeXpDeducted));
+        sb.append("- Total Net XP (All-Time): ").append(String.format("%d XP (Gained: +%d, Deducted: -%d)\n", allTimeNetXp, allTimeXpGained, allTimeXpDeducted));
         sb.append("- Tracking Active Period: From ").append(firstSessionDate).append(" to ").append(lastSessionDate).append("\n");
         sb.append("- Configured Subject List: ").append(String.join(", ", subjects)).append("\n\n");
 
@@ -4610,12 +4617,12 @@ public class AppFrame extends JFrame {
             recentSpanSec += span;
         }
         long recentMidSessionBreaks = Math.max(0, recentSpanSec - totalActiveSec);
-        double recentXpGained = totalActiveSec / 60.0;
-        double recentXpDeducted = recentMidSessionBreaks / 60.0 * 0.25;
-        double recentNetXp = recentXpGained - recentXpDeducted;
-        double avgRecentXp = activeDates.size() > 0 ? recentNetXp / activeDates.size() : 0.0;
-        sb.append("- 7-Day Net XP: ").append(String.format("%.2f XP (Gained: +%.2f, Deducted: -%.2f)\n", recentNetXp, recentXpGained, recentXpDeducted));
-        sb.append("- Avg XP / Active Day: ").append(String.format("%.2f XP/day\n", avgRecentXp));
+        int recentXpGained = (int) Math.round(totalActiveSec / 60.0);
+        int recentXpDeducted = (int) Math.round(recentMidSessionBreaks / 60.0 * 0.25);
+        int recentNetXp = recentXpGained - recentXpDeducted;
+        double avgRecentXp = activeDates.size() > 0 ? (double) recentNetXp / activeDates.size() : 0.0;
+        sb.append("- 7-Day Net XP: ").append(String.format("%d XP (Gained: +%d, Deducted: -%d)\n", recentNetXp, recentXpGained, recentXpDeducted));
+        sb.append("- Avg XP / Active Day: ").append(String.format("%.1f XP/day\n", avgRecentXp));
         
         // Subject Breakdown
         sb.append("\n### SUBJECT & CHAPTER BREAKDOWN (Last 7 Days):\n");
