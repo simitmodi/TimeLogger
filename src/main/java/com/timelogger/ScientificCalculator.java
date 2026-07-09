@@ -767,7 +767,13 @@ public class ScientificCalculator extends JDialog {
         if (res == (long) res) {
             return String.format("%d", (long) res);
         }
-        return String.format(java.util.Locale.US, "%.8g", res);
+        java.math.BigDecimal bd = new java.math.BigDecimal(res);
+        bd = bd.setScale(16, java.math.RoundingMode.HALF_UP);
+        String valStr = bd.stripTrailingZeros().toPlainString();
+        if (!valStr.contains(".")) {
+            return valStr;
+        }
+        return valStr;
     }
     
     private void showHelpDialog() {

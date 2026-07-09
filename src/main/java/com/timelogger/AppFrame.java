@@ -571,7 +571,9 @@ public class AppFrame extends JFrame {
         questionsCard.add(new JLabel(" Desc: "));
         questionsCard.add(stopwatchQuestionDescCombo);
         
-        stopwatchCalcBtn = new ModernButton("🧮 Calculator");
+        stopwatchCalcBtn = new ModernButton("Calculator");
+        stopwatchCalcBtn.setIcon(new CalculatorIcon());
+        stopwatchCalcBtn.setIconTextGap(6);
         stopwatchCalcBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
         stopwatchCalcBtn.setBackground(new Color(21, 101, 192));
         stopwatchCalcBtn.setForeground(Color.WHITE);
@@ -5414,6 +5416,30 @@ public class AppFrame extends JFrame {
                 scientificCalculator.setVisible(false);
             }
         }
+    }
+
+    private static class CalculatorIcon implements javax.swing.Icon {
+        @Override
+        public void paintIcon(java.awt.Component c, java.awt.Graphics g, int x, int y) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(c.getForeground());
+            g2.drawRoundRect(x, y, 12, 14, 2, 2);
+            g2.fillRect(x + 2, y + 2, 8, 3);
+            
+            g2.fillRect(x + 2, y + 7, 2, 2);
+            g2.fillRect(x + 5, y + 7, 2, 2);
+            g2.fillRect(x + 8, y + 7, 2, 2);
+            g2.fillRect(x + 2, y + 10, 2, 2);
+            g2.fillRect(x + 5, y + 10, 2, 2);
+            g2.fillRect(x + 8, y + 10, 2, 2);
+            g2.dispose();
+        }
+
+        @Override
+        public int getIconWidth() { return 13; }
+        @Override
+        public int getIconHeight() { return 15; }
     }
 }
 
