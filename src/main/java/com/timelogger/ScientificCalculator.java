@@ -406,36 +406,78 @@ public class ScientificCalculator extends JDialog {
     }
 
     private JButton createStyledButton(String text, Color bg) {
-        JButton btn = new JButton(text);
-        btn.setFont(new Font("SansSerif", Font.BOLD, 14));
+        JButton btn = new JButton(text) {
+            private boolean isHovered = false;
+            {
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        isHovered = true;
+                        repaint();
+                    }
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        isHovered = false;
+                        repaint();
+                    }
+                });
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                Color drawBg = bg;
+                if (getModel().isPressed()) {
+                    drawBg = getDarkerColor(bg);
+                } else if (isHovered) {
+                    drawBg = getHoverColor(bg);
+                }
+                
+                g2.setColor(drawBg);
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                
+                // Thin border
+                g2.setColor(new Color(180, 180, 180));
+                g2.drawRect(0, 0, getWidth() - 1, getHeight() - 1);
+                
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btn.setContentAreaFilled(false);
         btn.setFocusPainted(false);
-        btn.setBackground(bg);
-        btn.setForeground(new Color(33, 33, 33));
-        if (bg.getRed() < 100 || bg.getGreen() < 100) {
-            btn.setForeground(Color.WHITE); // high contrast for green/red
-        }
-        btn.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180)));
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setFont(new Font("SansSerif", Font.BOLD, 14));
         
-        // Hover effects
-        btn.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                btn.setBackground(getDarkerColor(bg));
-            }
-            @Override
-            public void mouseExited(MouseEvent e) {
-                btn.setBackground(bg);
-            }
-        });
+        // Correct text visibility check
+        if (bg.getRed() > 200 && bg.getGreen() < 100) { // Red buttons
+            btn.setForeground(Color.WHITE);
+        } else if (bg.getGreen() > 100 && bg.getRed() < 100) { // Green equals button
+            btn.setForeground(Color.WHITE);
+        } else if (bg.getBlue() > 200 && bg.getRed() < 100) { // Blue accent buttons (e.g. Help)
+            btn.setForeground(Color.WHITE);
+        } else {
+            btn.setForeground(new Color(33, 33, 33)); // Dark text for white/gray buttons
+        }
+        
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return btn;
+    }
+    
+    private Color getHoverColor(Color c) {
+        return new Color(
+            Math.max(0, c.getRed() - 15),
+            Math.max(0, c.getGreen() - 15),
+            Math.max(0, c.getBlue() - 15)
+        );
     }
     
     private Color getDarkerColor(Color c) {
         return new Color(
-            Math.max(0, c.getRed() - 20),
-            Math.max(0, c.getGreen() - 20),
-            Math.max(0, c.getBlue() - 20)
+            Math.max(0, c.getRed() - 30),
+            Math.max(0, c.getGreen() - 30),
+            Math.max(0, c.getBlue() - 30)
         );
     }
     

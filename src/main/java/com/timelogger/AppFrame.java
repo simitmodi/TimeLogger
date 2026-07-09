@@ -115,7 +115,7 @@ public class AppFrame extends JFrame {
         "DPP Questions", "Practice Book Questions", "Previous Year Questions"
     });
     final JComboBox<String> stopwatchQuestionDescCombo = new JComboBox<>();
-    private JButton stopwatchCalcBtn;
+    private ModernButton stopwatchCalcBtn;
     final JTextField stopwatchChapterField = new JTextField(5);
     final JTextField stopwatchLectureField = new JTextField(5);
     final JTextField stopwatchRevisionTopicField = new JTextField(20);
@@ -571,8 +571,12 @@ public class AppFrame extends JFrame {
         questionsCard.add(new JLabel(" Desc: "));
         questionsCard.add(stopwatchQuestionDescCombo);
         
-        stopwatchCalcBtn = new JButton("🧮 Calculator");
-        stopwatchCalcBtn.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        stopwatchCalcBtn = new ModernButton("🧮 Calculator");
+        stopwatchCalcBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        stopwatchCalcBtn.setBackground(new Color(21, 101, 192));
+        stopwatchCalcBtn.setForeground(Color.WHITE);
+        stopwatchCalcBtn.setBorderColor(new Color(13, 71, 161));
+        stopwatchCalcBtn.setPreferredSize(new Dimension(130, 30));
         stopwatchCalcBtn.addActionListener(e -> {
             if (scientificCalculator == null) {
                 scientificCalculator = new ScientificCalculator(this);
