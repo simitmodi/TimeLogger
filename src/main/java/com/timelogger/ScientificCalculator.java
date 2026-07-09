@@ -17,6 +17,7 @@ public class ScientificCalculator extends JDialog {
     private boolean isDeg = true;
     private int posX = 0;
     private int posY = 0;
+    private boolean isFreshInput = true;
 
     public ScientificCalculator(Frame owner) {
         super(owner, "Scientific Calculator", false);
@@ -94,7 +95,7 @@ public class ScientificCalculator extends JDialog {
         
         rootPanel.add(titleBar, BorderLayout.NORTH);
         
-        // 2. Display area
+        // 2. Display area (both displays right-aligned for GATE virtual calculator)
         JPanel displayPanel = new JPanel(new GridLayout(2, 1, 4, 4));
         displayPanel.setBackground(new Color(230, 230, 230));
         displayPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -102,7 +103,7 @@ public class ScientificCalculator extends JDialog {
         historyField = new JTextField();
         historyField.setEditable(false);
         historyField.setFocusable(false);
-        historyField.setHorizontalAlignment(JTextField.LEFT);
+        historyField.setHorizontalAlignment(JTextField.RIGHT);
         historyField.setFont(new Font("Monospaced", Font.PLAIN, 14));
         historyField.setBackground(Color.WHITE);
         historyField.setBorder(BorderFactory.createCompoundBorder(
@@ -448,109 +449,15 @@ public class ScientificCalculator extends JDialog {
         }
     }
     
-    private void handleInput(String cmd) {
-        String history = historyField.getText();
-        String current = displayField.getText();
-        
-        if (cmd.equals("C")) {
-            historyField.setText("");
-            displayField.setText("0");
-        } else if (cmd.equals("←")) {
-            if (!history.isEmpty()) {
-                historyField.setText(history.substring(0, history.length() - 1));
-            }
-        } else if (cmd.equals("+/-")) {
-            if (!current.equals("0")) {
-                if (current.startsWith("-")) {
-                    displayField.setText(current.substring(1));
-                } else {
-                    displayField.setText("-" + current);
-                }
-            }
-        } else if (cmd.equals("MC")) {
-            memoryValue = 0.0;
-        } else if (cmd.equals("MR")) {
-            displayField.setText(formatResult(memoryValue));
-        } else if (cmd.equals("MS")) {
-            try {
-                memoryValue = Double.parseDouble(current);
-            } catch (NumberFormatException ignored) {}
-        } else if (cmd.equals("M+")) {
-            try {
-                memoryValue += Double.parseDouble(current);
-            } catch (NumberFormatException ignored) {}
-        } else if (cmd.equals("M-")) {
-            try {
-                memoryValue -= Double.parseDouble(current);
-            } catch (NumberFormatException ignored) {}
-        } else if (cmd.equals("=")) {
-            if (!history.isEmpty()) {
-                // Evaluate formula
-                try {
-                    String formula = history;
-                    // Append current display if last char is an operator or paren
-                    if (Character.isDigit(formula.charAt(formula.length() - 1)) || formula.endsWith(")")) {
-                        // Do nothing, formula is complete
-                    } else {
-                        formula += current;
-                    }
-                    
-                    double res = evaluateExpression(formula);
-                    displayField.setText(formatResult(res));
-                    historyField.setText(formatResult(res));
-                } catch (Exception ex) {
-                    displayField.setText("Error");
-                }
-            }
-        } else if (cmd.equals("sin") || cmd.equals("cos") || cmd.equals("tan") ||
-                   cmd.equals("sinh") || cmd.equals("cosh") || cmd.equals("tanh") ||
-                   cmd.equals("sin⁻¹") || cmd.equals("cos⁻¹") || cmd.equals("tan⁻¹") ||
-                   cmd.equals("sinh⁻¹") || cmd.equals("cosh⁻¹") || cmd.equals("tanh⁻¹") ||
-                   cmd.equals("ln") || cmd.equals("log") || cmd.equals("log₂x") ||
-                   cmd.equals("logʸx") || cmd.equals("ʸ√x") || cmd.equals("³√") ||
-                   cmd.equals("|x|") || cmd.equals("√")) {
-            
-            String funcName = mapButtonToFunc(cmd);
-            historyField.setText(history + funcName + "(");
-        } else if (cmd.equals("xʸ")) {
-            historyField.setText(history + "^");
-        } else if (cmd.equals("x³")) {
-            historyField.setText(history + "^3");
-        } else if (cmd.equals("x²")) {
-            historyField.setText(history + "^2");
-        } else if (cmd.equals("eˣ")) {
-            historyField.setText(history + "e^");
-        } else if (cmd.equals("10ˣ")) {
-            historyField.setText(history + "10^");
-        } else if (cmd.equals("n!")) {
-            historyField.setText(history + "!");
-        } else if (cmd.equals("1/x")) {
-            historyField.setText(history + "recip(");
-        } else if (cmd.equals("Exp")) {
-            historyField.setText(history + "*10^");
-        } else if (cmd.equals("π")) {
-            historyField.setText(history + "π");
-        } else if (cmd.equals("e")) {
-            historyField.setText(history + "e");
-        } else {
-            // Numbers, decimal point, basic math operators
-            if (cmd.equals("+") || cmd.equals("-") || cmd.equals("*") || cmd.equals("/") || cmd.equals("mod") || cmd.equals("%")) {
-                if (history.isEmpty()) {
-                    historyField.setText(current + " " + cmd + " ");
-                } else {
-                    historyField.setText(history + " " + cmd + " ");
-                }
-            } else {
-                // It is a digit or decimal point or comma
-                historyField.setText(history + cmd);
-                // Also update bottom display for quick typing
-                if (current.equals("0") && !cmd.equals(".")) {
-                    displayField.setText(cmd);
-                } else {
-                    displayField.setText(current + cmd);
-                }
-            }
-        }
+    private boolean isSingleArgFunc(String cmd) {
+        return cmd.equals("sin") || cmd.equals("cos") || cmd.equals("tan") ||
+               cmd.equals("sinh") || cmd.equals("cosh") || cmd.equals("tanh") ||
+               cmd.equals("sin⁻¹") || cmd.equals("cos⁻¹") || cmd.equals("tan⁻¹") ||
+               cmd.equals("sinh⁻¹") || cmd.equals("cosh⁻¹") || cmd.equals("tanh⁻¹") ||
+               cmd.equals("ln") || cmd.equals("log") || cmd.equals("log₂x") ||
+               cmd.equals("³√") || cmd.equals("|x|") || cmd.equals("√") ||
+               cmd.equals("n!") || cmd.equals("1/x") || cmd.equals("x²") ||
+               cmd.equals("x³") || cmd.equals("eˣ") || cmd.equals("10ˣ");
     }
     
     private String mapButtonToFunc(String btn) {
@@ -570,12 +477,228 @@ public class ScientificCalculator extends JDialog {
             case "ln": return "ln";
             case "log": return "log";
             case "log₂x": return "log2";
-            case "logʸx": return "logbase";
-            case "ʸ√x": return "yroot";
             case "³√": return "cbrt";
             case "|x|": return "abs";
             case "√": return "sqrt";
+            case "n!": return "fact";
+            case "1/x": return "recip";
+            case "x²": return "sqr";
+            case "x³": return "cube";
+            case "eˣ": return "exp";
+            case "10ˣ": return "tenX";
             default: return "";
+        }
+    }
+    
+    private String getFuncHistoryString(String func, String valStr) {
+        switch (func) {
+            case "sin": return "sin(" + valStr + ")";
+            case "cos": return "cos(" + valStr + ")";
+            case "tan": return "tan(" + valStr + ")";
+            case "asin": return "asin(" + valStr + ")";
+            case "acos": return "acos(" + valStr + ")";
+            case "atan": return "atan(" + valStr + ")";
+            case "sinh": return "sinh(" + valStr + ")";
+            case "cosh": return "cosh(" + valStr + ")";
+            case "tanh": return "tanh(" + valStr + ")";
+            case "asinh": return "asinh(" + valStr + ")";
+            case "acosh": return "acosh(" + valStr + ")";
+            case "atanh": return "atanh(" + valStr + ")";
+            case "ln": return "ln(" + valStr + ")";
+            case "log": return "log(" + valStr + ")";
+            case "log2": return "log2(" + valStr + ")";
+            case "sqrt": return "sqrt(" + valStr + ")";
+            case "cbrt": return "cbrt(" + valStr + ")";
+            case "abs": return "abs(" + valStr + ")";
+            case "recip": return "recip(" + valStr + ")";
+            case "fact": return "fact(" + valStr + ")";
+            case "sqr": return "sqr(" + valStr + ")";
+            case "cube": return "cube(" + valStr + ")";
+            case "exp": return "exp(" + valStr + ")";
+            case "tenX": return "pow10(" + valStr + ")";
+            default: return valStr;
+        }
+    }
+    
+    private double calculateSingleArgFunc(String func, double val) {
+        switch (func) {
+            case "sin": return isDeg ? Math.sin(Math.toRadians(val)) : Math.sin(val);
+            case "cos": return isDeg ? Math.cos(Math.toRadians(val)) : Math.cos(val);
+            case "tan": return isDeg ? Math.tan(Math.toRadians(val)) : Math.tan(val);
+            case "asin": 
+                double rAsin = Math.asin(val);
+                return isDeg ? Math.toDegrees(rAsin) : rAsin;
+            case "acos":
+                double rAcos = Math.acos(val);
+                return isDeg ? Math.toDegrees(rAcos) : rAcos;
+            case "atan":
+                double rAtan = Math.atan(val);
+                return isDeg ? Math.toDegrees(rAtan) : rAtan;
+            case "sinh": return Math.sinh(val);
+            case "cosh": return Math.cosh(val);
+            case "tanh": return Math.tanh(val);
+            case "asinh": return Math.log(val + Math.sqrt(val * val + 1));
+            case "acosh": return Math.log(val + Math.sqrt(val * val - 1));
+            case "atanh": return 0.5 * Math.log((1 + val) / (1 - val));
+            case "ln": return Math.log(val);
+            case "log": return Math.log10(val);
+            case "log2": return Math.log(val) / Math.log(2);
+            case "sqrt": return Math.sqrt(val);
+            case "cbrt": return Math.cbrt(val);
+            case "abs": return Math.abs(val);
+            case "recip": return 1.0 / val;
+            case "fact": return factorial((int) val);
+            case "sqr": return val * val;
+            case "cube": return val * val * val;
+            case "exp": return Math.exp(val);
+            case "tenX": return Math.pow(10, val);
+            default: return val;
+        }
+    }
+
+    private double factorial(int n) {
+        if (n < 0) return Double.NaN;
+        double f = 1;
+        for (int i = 2; i <= n; i++) f *= i;
+        return f;
+    }
+    
+    private void handleInput(String cmd) {
+        String history = historyField.getText().trim();
+        String current = displayField.getText();
+        
+        if (cmd.equals("C")) {
+            historyField.setText("");
+            displayField.setText("0");
+            isFreshInput = true;
+        } else if (cmd.equals("←")) {
+            if (!isFreshInput && current.length() > 0) {
+                String next = current.substring(0, current.length() - 1);
+                if (next.isEmpty() || next.equals("-")) next = "0";
+                displayField.setText(next);
+            }
+        } else if (cmd.equals("+/-")) {
+            if (!current.equals("0")) {
+                if (current.startsWith("-")) {
+                    displayField.setText(current.substring(1));
+                } else {
+                    displayField.setText("-" + current);
+                }
+            }
+        } else if (cmd.equals("MC")) {
+            memoryValue = 0.0;
+        } else if (cmd.equals("MR")) {
+            displayField.setText(formatResult(memoryValue));
+            isFreshInput = true;
+        } else if (cmd.equals("MS")) {
+            try {
+                memoryValue = Double.parseDouble(current);
+            } catch (NumberFormatException ignored) {}
+        } else if (cmd.equals("M+")) {
+            try {
+                memoryValue += Double.parseDouble(current);
+            } catch (NumberFormatException ignored) {}
+        } else if (cmd.equals("M-")) {
+            try {
+                memoryValue -= Double.parseDouble(current);
+            } catch (NumberFormatException ignored) {}
+        } else if (cmd.equals("=")) {
+            // Evaluate history + current
+            String exprToEvaluate = "";
+            if (history.isEmpty()) {
+                exprToEvaluate = current;
+            } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot")) {
+                exprToEvaluate = history + " " + current;
+            } else {
+                exprToEvaluate = history;
+            }
+            try {
+                double res = evaluateExpression(exprToEvaluate);
+                displayField.setText(formatResult(res));
+                // Set history to the evaluated formula without '=' or result
+                historyField.setText(exprToEvaluate.replaceAll("\\s+", ""));
+                isFreshInput = true;
+            } catch (Exception ex) {
+                displayField.setText("Error");
+            }
+        } else if (isSingleArgFunc(cmd)) {
+            // Apply function to current value (Value first, Function second)
+            try {
+                double val = Double.parseDouble(current);
+                String func = mapButtonToFunc(cmd);
+                double res = calculateSingleArgFunc(func, val);
+                displayField.setText(formatResult(res));
+                
+                // Update history
+                String funcHist = getFuncHistoryString(func, current);
+                if (history.isEmpty()) {
+                    historyField.setText(funcHist);
+                } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot")) {
+                    historyField.setText(history + " " + funcHist);
+                } else {
+                    historyField.setText(funcHist);
+                }
+                isFreshInput = true;
+            } catch (Exception ex) {
+                displayField.setText("Error");
+            }
+        } else if (cmd.equals("+") || cmd.equals("-") || cmd.equals("*") || cmd.equals("/") || cmd.equals("mod") || cmd.equals("%") || cmd.equals("xʸ") || cmd.equals("ʸ√x")) {
+            // Binary operator
+            String op = cmd;
+            if (cmd.equals("xʸ")) op = "^";
+            if (cmd.equals("ʸ√x")) op = "yroot";
+            if (cmd.equals("mod")) op = "%";
+            
+            if (history.isEmpty()) {
+                historyField.setText(current + " " + op);
+            } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot")) {
+                // Replace last operator
+                int lastSpace = history.lastIndexOf(' ');
+                if (lastSpace != -1) {
+                    historyField.setText(history.substring(0, lastSpace) + " " + op);
+                } else {
+                    historyField.setText(current + " " + op);
+                }
+            } else {
+                historyField.setText(history + " " + op);
+            }
+            isFreshInput = true;
+        } else if (cmd.equals("π")) {
+            displayField.setText(formatResult(Math.PI));
+            isFreshInput = true;
+        } else if (cmd.equals("e")) {
+            displayField.setText(formatResult(Math.E));
+            isFreshInput = true;
+        } else {
+            // Digits, decimal point, parentheses
+            if (cmd.equals("(") || cmd.equals(")")) {
+                if (cmd.equals("(")) {
+                    if (history.isEmpty()) {
+                        historyField.setText("(");
+                    } else {
+                        historyField.setText(history + " (");
+                    }
+                } else {
+                    historyField.setText(history + " " + current + ")");
+                }
+                isFreshInput = true;
+            } else {
+                // It is a digit or decimal point
+                if (isFreshInput) {
+                    if (cmd.equals(".")) {
+                        displayField.setText("0.");
+                    } else {
+                        displayField.setText(cmd);
+                    }
+                    isFreshInput = false;
+                } else {
+                    if (cmd.equals(".") && current.contains(".")) {
+                        // ignore
+                    } else {
+                        displayField.setText(current + cmd);
+                    }
+                }
+            }
         }
     }
     
@@ -589,22 +712,20 @@ public class ScientificCalculator extends JDialog {
     }
     
     private void showHelpDialog() {
-        String msg = "Scientific Calculator Guide:\n\n" +
-                     "- Trigonometry functions (sin, cos, tan) depend on Deg/Rad selection.\n" +
-                     "- Memory Keys:\n" +
-                     "   * MS: Store display value\n" +
-                     "   * MR: Recall stored value\n" +
-                     "   * MC: Clear memory\n" +
-                     "   * M+/M-: Add/Subtract display from memory\n" +
-                     "- Custom log base: logbase(x, base)\n" +
-                     "- Custom y-th root: yroot(x, y)\n" +
-                     "- Keyboard input is disabled. Click buttons to operate.";
-        JOptionPane.showMessageDialog(this, msg, "Calculator Help", JOptionPane.INFORMATION_MESSAGE);
+        String msg = "GATE Virtual Calculator Guide:\n\n" +
+                     "- Value First, Function Second:\n" +
+                     "  To compute single-arg functions (e.g. sin(30), sqrt(16)):\n" +
+                     "  1. Enter the value first (e.g., 30 or 16).\n" +
+                     "  2. Click the function key (e.g., sin or √).\n" +
+                     "  3. Result is computed instantly!\n\n" +
+                     "- Double Display Right-Aligned:\n" +
+                     "  Displays inputs and histories right-aligned for better visibility.\n\n" +
+                     "- Trigonometry functions depend on Deg/Rad selection.\n" +
+                     "- Keyboard input is completely disabled.";
+        JOptionPane.showMessageDialog(this, msg, "GATE Calculator Help", JOptionPane.INFORMATION_MESSAGE);
     }
     
-    // Evaluation Engine: Recursive Descent Parser
     private double evaluateExpression(String expr) {
-        // Clean formula string
         String clean = expr.replaceAll("\\s+", "")
                            .replaceAll("mod", "%")
                            .replaceAll("π", "pi");
@@ -736,6 +857,16 @@ public class ScientificCalculator extends JDialog {
                         x = Math.abs(arg1);
                     } else if (name.equals("recip")) {
                         x = 1.0 / arg1;
+                    } else if (name.equals("sqr")) {
+                        x = arg1 * arg1;
+                    } else if (name.equals("cube")) {
+                        x = arg1 * arg1 * arg1;
+                    } else if (name.equals("exp")) {
+                        x = Math.exp(arg1);
+                    } else if (name.equals("pow10")) {
+                        x = Math.pow(10, arg1);
+                    } else if (name.equals("fact")) {
+                        x = factorial((int) arg1);
                     } else {
                         throw new RuntimeException("Unknown function: " + name);
                     }
