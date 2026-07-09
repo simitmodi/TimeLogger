@@ -20,7 +20,7 @@ public class HeatmapPanel extends JPanel {
     private Map<LocalDate, Long> dailyDurations = new HashMap<>();
 
     public HeatmapPanel() {
-        setPreferredSize(new Dimension(800, 180));
+        setPreferredSize(new Dimension(260, 180));
         setToolTipText(""); // Enables tooltip registration in Swing
 
         addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {

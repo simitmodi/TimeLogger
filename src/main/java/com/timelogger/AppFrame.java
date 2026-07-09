@@ -1284,14 +1284,14 @@ public class AppFrame extends JFrame {
         gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
         mainContent.add(timelineCard, gbc);
 
-        // Row 6: Activity Heatmap (Spans all 4 columns, 1 row)
+        // Row 6: Left: Activity Heatmap (starts Col 0, spans 1 Col), Right: Daily XP Ledger (starts Col 1, spans 3 Cols)
         gbc.gridy = 6;
-        gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;
+        gbc.gridheight = 1; gbc.weighty = 0.5;
+        
+        gbc.gridx = 0; gbc.gridwidth = 1; gbc.weightx = 1.0;
         mainContent.add(heatmapCard, gbc);
-
-        // Row 7: Daily XP Ledger & Comparison (Spans all 4 columns, 1 row)
-        gbc.gridy = 7;
-        gbc.gridx = 0; gbc.gridwidth = 4; gbc.gridheight = 1; gbc.weightx = 1.0; gbc.weighty = 0.5;
+        
+        gbc.gridx = 1; gbc.gridwidth = 3; gbc.weightx = 3.0;
         mainContent.add(dailyXpCard, gbc);
 
         // Wrap the bento grid in a scroll pane to support smaller screens
