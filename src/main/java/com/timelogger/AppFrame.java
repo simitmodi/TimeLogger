@@ -324,10 +324,14 @@ public class AppFrame extends JFrame {
             
             if (selectedIdx != tabs.indexOfTab("Stopwatch")) {
                 if (scientificCalculator != null && scientificCalculator.isVisible()) {
+                    calcWasVisibleBeforeTabSwitch = true;
                     scientificCalculator.setVisible(false);
                 }
             } else {
-                updateCalculatorVisibility();
+                if (calcWasVisibleBeforeTabSwitch && scientificCalculator != null) {
+                    scientificCalculator.setVisible(true);
+                    calcWasVisibleBeforeTabSwitch = false;
+                }
             }
         });
 
@@ -357,16 +361,20 @@ public class AppFrame extends JFrame {
             @Override
             public void windowIconified(java.awt.event.WindowEvent e) {
                 if (scientificCalculator != null && scientificCalculator.isVisible()) {
+                    calcWasVisibleBeforeMinimize = true;
                     scientificCalculator.setVisible(false);
                 }
             }
             @Override
             public void windowDeiconified(java.awt.event.WindowEvent e) {
-                updateCalculatorVisibility();
+                if (calcWasVisibleBeforeMinimize && scientificCalculator != null) {
+                    scientificCalculator.setVisible(true);
+                    calcWasVisibleBeforeMinimize = false;
+                }
             }
         });
         
-        updateCalculatorVisibility();
+        // Calculator button is always visible; opening is manual only
     }
 
     private void applyFontToContainer(java.awt.Container container, Font labelFont, Font controlFont) {
@@ -571,6 +579,7 @@ public class AppFrame extends JFrame {
         questionsCard.add(new JLabel(" Desc: "));
         questionsCard.add(stopwatchQuestionDescCombo);
         
+        // Calculator button is created here but added to the config panel (row 2) below
         stopwatchCalcBtn = new ModernButton("Calculator");
         stopwatchCalcBtn.setIcon(new CalculatorIcon());
         stopwatchCalcBtn.setIconTextGap(6);
@@ -585,7 +594,6 @@ public class AppFrame extends JFrame {
             }
             scientificCalculator.setVisible(true);
         });
-        questionsCard.add(stopwatchCalcBtn);
 
         JPanel lectureCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         lectureCard.add(new JLabel("Ch No: "));
@@ -610,7 +618,7 @@ public class AppFrame extends JFrame {
             stopwatchActivitySubPanel.repaint();
             config.revalidate();
             config.repaint();
-            updateCalculatorVisibility();
+            // Calculator visibility is now manual; no auto-open/close on activity change
         });
 
         final String[] lastSelectedDesc = {null};
@@ -654,7 +662,7 @@ public class AppFrame extends JFrame {
                 if (subject == null) subject = "";
                 String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
                 selectOrAddQuestionDesc(lastDesc);
-                updateCalculatorVisibility();
+                // Calculator visibility is now manual; no auto-open/close on question type change
             }
         });
 
@@ -676,6 +684,15 @@ public class AppFrame extends JFrame {
         gbcSub.fill = GridBagConstraints.NONE;
         gbcSub.anchor = GridBagConstraints.CENTER;
         config.add(stopwatchActivitySubPanel, gbcSub);
+
+        // Calculator button row — always visible for all activity modes
+        GridBagConstraints gbcCalc = new GridBagConstraints();
+        gbcCalc.gridx = 0;
+        gbcCalc.gridy = 2;
+        gbcCalc.insets = new Insets(4, 12, 4, 12);
+        gbcCalc.fill = GridBagConstraints.NONE;
+        gbcCalc.anchor = GridBagConstraints.CENTER;
+        config.add(stopwatchCalcBtn, gbcCalc);
 
         centerPanel.add(stopwatchSubjectLabel, BorderLayout.NORTH);
         centerPanel.add(stopwatchTimeLabel, BorderLayout.CENTER);
@@ -5394,29 +5411,9 @@ public class AppFrame extends JFrame {
         }
     }
 
-    private void updateCalculatorVisibility() {
-        String activityType = (String) stopwatchActivityTypeCombo.getSelectedItem();
-        String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
-        boolean shouldShow = "Questions".equals(activityType) && 
-                            ("Practice Book Questions".equals(qType) || "Previous Year Questions".equals(qType));
-        
-        if (stopwatchCalcBtn != null) {
-            stopwatchCalcBtn.setVisible(shouldShow);
-        }
-
-        if (shouldShow) {
-            if (scientificCalculator == null) {
-                scientificCalculator = new ScientificCalculator(this);
-            }
-            if (!scientificCalculator.isVisible()) {
-                scientificCalculator.setVisible(true);
-            }
-        } else {
-            if (scientificCalculator != null && scientificCalculator.isVisible()) {
-                scientificCalculator.setVisible(false);
-            }
-        }
-    }
+    // Calculator is always accessible; these flags track visibility state across tab switches and minimize
+    private boolean calcWasVisibleBeforeTabSwitch = false;
+    private boolean calcWasVisibleBeforeMinimize = false;
 
     private static class CalculatorIcon implements javax.swing.Icon {
         @Override
