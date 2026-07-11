@@ -288,7 +288,7 @@ public class AppFrame extends JFrame {
 
         setJMenuBar(createMenuBar());
         setLayout(new BorderLayout());
-        add(createTabbedPaneWithMediaOverlay(), BorderLayout.CENTER);
+        add(createTabs(), BorderLayout.CENTER);
 
         refreshStopwatchSubjects();
         refreshQuestionTopicsDropdown();
@@ -482,15 +482,13 @@ public class AppFrame extends JFrame {
         return tabs;
     }
 
-    private javax.swing.JComponent createTabbedPaneWithMediaOverlay() {
-        createTabs(); // Initializes this.tabs
-
-        JPanel mediaPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+    private JPanel createMediaControlsPanel() {
+        JPanel mediaPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
         mediaPanel.setOpaque(false);
 
-        JButton prevBtn = createMediaButton("⏮", "Previous Track", 26, 11);
-        JButton playBtn = createMediaButton("⏯", "Play / Pause", 30, 13);
-        JButton nextBtn = createMediaButton("⏭", "Next Track", 26, 11);
+        JButton prevBtn = createMediaButton("⏮", "Previous Track", 34, 13);
+        JButton playBtn = createMediaButton("⏯", "Play / Pause", 42, 17);
+        JButton nextBtn = createMediaButton("⏭", "Next Track", 34, 13);
 
         prevBtn.addActionListener(e -> sendMediaKey("prev"));
         playBtn.addActionListener(e -> sendMediaKey("play"));
@@ -499,43 +497,7 @@ public class AppFrame extends JFrame {
         mediaPanel.add(prevBtn);
         mediaPanel.add(playBtn);
         mediaPanel.add(nextBtn);
-
-        javax.swing.JLayeredPane layeredPane = new javax.swing.JLayeredPane();
-        layeredPane.setLayout(new java.awt.LayoutManager() {
-            @Override
-            public void addLayoutComponent(String name, java.awt.Component comp) {}
-            @Override
-            public void removeLayoutComponent(java.awt.Component comp) {}
-            @Override
-            public Dimension preferredLayoutSize(java.awt.Container parent) {
-                return tabs.getPreferredSize();
-            }
-            @Override
-            public Dimension minimumLayoutSize(java.awt.Container parent) {
-                return tabs.getMinimumSize();
-            }
-            @Override
-            public void layoutContainer(java.awt.Container parent) {
-                int width = parent.getWidth();
-                int height = parent.getHeight();
-                tabs.setBounds(0, 0, width, height);
-
-                Dimension pref = mediaPanel.getPreferredSize();
-                int tabBarHeight = 28;
-                if (tabs.getTabCount() > 0) {
-                    java.awt.Rectangle tabBounds = tabs.getBoundsAt(0);
-                    if (tabBounds != null) {
-                        tabBarHeight = tabBounds.height + tabBounds.y;
-                    }
-                }
-                int y = (tabBarHeight - pref.height) / 2;
-                mediaPanel.setBounds(width - pref.width - 12, Math.max(0, y), pref.width, pref.height);
-            }
-        });
-
-        layeredPane.add(tabs, javax.swing.JLayeredPane.DEFAULT_LAYER);
-        layeredPane.add(mediaPanel, javax.swing.JLayeredPane.PALETTE_LAYER);
-        return layeredPane;
+        return mediaPanel;
     }
 
     private void sendMediaKey(String action) {
@@ -634,7 +596,7 @@ public class AppFrame extends JFrame {
         stopwatchLectureField.setPreferredSize(new Dimension(50, 28));
         stopwatchRevisionTopicField.setPreferredSize(new Dimension(300, 28));
 
-        JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
+        JPanel centerPanel = new JPanel(new GridBagLayout());
         stopwatchConfigPanel = new JPanel(new GridBagLayout());
         JPanel config = stopwatchConfigPanel;
         GridBagConstraints gbcConfig = new GridBagConstraints();
@@ -832,8 +794,20 @@ public class AppFrame extends JFrame {
         gbcCalc.anchor = GridBagConstraints.CENTER;
         config.add(stopwatchCalcBtn, gbcCalc);
 
-        centerPanel.add(stopwatchSubjectLabel, BorderLayout.NORTH);
-        centerPanel.add(stopwatchTimeLabel, BorderLayout.CENTER);
+        GridBagConstraints gbcCent = new GridBagConstraints();
+        gbcCent.gridx = 0;
+        gbcCent.gridy = 0;
+        gbcCent.insets = new Insets(5, 0, 5, 0);
+        gbcCent.anchor = GridBagConstraints.CENTER;
+        centerPanel.add(stopwatchSubjectLabel, gbcCent);
+
+        gbcCent.gridy = 1;
+        gbcCent.insets = new Insets(10, 0, 10, 0);
+        centerPanel.add(createMediaControlsPanel(), gbcCent);
+
+        gbcCent.gridy = 2;
+        gbcCent.insets = new Insets(5, 0, 5, 0);
+        centerPanel.add(stopwatchTimeLabel, gbcCent);
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 10));
         stopwatchStartButton.addActionListener(e -> startStopwatch());
@@ -891,7 +865,20 @@ public class AppFrame extends JFrame {
         controls.add(timerResetButton);
 
         panel.add(config, BorderLayout.NORTH);
-        panel.add(timerTimeLabel, BorderLayout.CENTER);
+
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbcCent = new GridBagConstraints();
+        gbcCent.gridx = 0;
+        gbcCent.gridy = 0;
+        gbcCent.insets = new Insets(10, 0, 10, 0);
+        gbcCent.anchor = GridBagConstraints.CENTER;
+        centerPanel.add(createMediaControlsPanel(), gbcCent);
+
+        gbcCent.gridy = 1;
+        gbcCent.insets = new Insets(5, 0, 5, 0);
+        centerPanel.add(timerTimeLabel, gbcCent);
+
+        panel.add(centerPanel, BorderLayout.CENTER);
         panel.add(controls, BorderLayout.SOUTH);
         return panel;
     }
