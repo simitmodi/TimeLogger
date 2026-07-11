@@ -479,7 +479,157 @@ public class AppFrame extends JFrame {
         tabs.addTab("Insights", createInsightsPanel());
         tabs.addTab("Subjects", createSubjectsPanel());
         tabs.addTab("AI Assistant", createAiAssistantPanel());
+
+        // Initialize Robot for media key simulation
+        java.awt.Robot mediaRobot = null;
+        try {
+            mediaRobot = new java.awt.Robot();
+        } catch (java.awt.AWTException ignored) {}
+        final java.awt.Robot robot = mediaRobot;
+
+        // Media control buttons — iTunes style, positioned in the tab bar area
+        mediaControlsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        mediaControlsPanel.setOpaque(false);
+
+        JButton prevBtn = createMediaButton("⏮", "Previous Track");
+        JButton playBtn = createMediaButton("⏯", "Play / Pause");
+        JButton nextBtn = createMediaButton("⏭", "Next Track");
+
+        // Windows media virtual key codes
+        final int VK_MEDIA_PREV = 0xB1;
+        final int VK_MEDIA_PLAY_PAUSE = 0xB3;
+        final int VK_MEDIA_NEXT = 0xB0;
+
+        prevBtn.addActionListener(e -> { if (robot != null) { robot.keyPress(VK_MEDIA_PREV); robot.keyRelease(VK_MEDIA_PREV); } });
+        playBtn.addActionListener(e -> { if (robot != null) { robot.keyPress(VK_MEDIA_PLAY_PAUSE); robot.keyRelease(VK_MEDIA_PLAY_PAUSE); } });
+        nextBtn.addActionListener(e -> { if (robot != null) { robot.keyPress(VK_MEDIA_NEXT); robot.keyRelease(VK_MEDIA_NEXT); } });
+
+        mediaControlsPanel.add(prevBtn);
+        mediaControlsPanel.add(playBtn);
+        mediaControlsPanel.add(nextBtn);
+
+        // Overlay media controls on top of the tab bar (right-aligned)
+        tabs.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                repositionMediaControls();
+            }
+        });
+
+        // Add media controls as a child of the JTabbedPane using absolute positioning
+        tabs.setLayout(new TabPaneOverlayLayout(tabs));
+        tabs.add(mediaControlsPanel);
+        tabs.setComponentZOrder(mediaControlsPanel, 0);
+
         return tabs;
+    }
+
+    private JPanel mediaControlsPanel;
+
+    private void repositionMediaControls() {
+        if (mediaControlsPanel == null || tabs == null) return;
+        Dimension pref = mediaControlsPanel.getPreferredSize();
+        int tabBarHeight = 0;
+        if (tabs.getTabCount() > 0) {
+            java.awt.Rectangle tabBounds = tabs.getBoundsAt(0);
+            if (tabBounds != null) {
+                tabBarHeight = tabBounds.height + tabBounds.y;
+            }
+        }
+        if (tabBarHeight < 20) tabBarHeight = 28;
+        int y = (tabBarHeight - pref.height) / 2;
+        mediaControlsPanel.setBounds(tabs.getWidth() - pref.width - 8, Math.max(0, y), pref.width, pref.height);
+    }
+
+    private JButton createMediaButton(String symbol, String tooltip) {
+        JButton btn = new JButton() {
+            private boolean isHovered = false;
+            {
+                addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) { isHovered = true; repaint(); }
+                    @Override
+                    public void mouseExited(MouseEvent e) { isHovered = false; repaint(); }
+                });
+            }
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (isHovered) {
+                    g2.setColor(new Color(0, 0, 0, 30));
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+                }
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btn.setToolTipText(tooltip);
+        btn.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 16));
+        btn.setText(symbol);
+        btn.setFocusPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setOpaque(false);
+        btn.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(32, 26));
+        return btn;
+    }
+
+    /**
+     * Custom layout manager that preserves the JTabbedPane's default layout
+     * but lets the media controls panel float on top with absolute positioning.
+     */
+    private static class TabPaneOverlayLayout implements java.awt.LayoutManager {
+        private final JTabbedPane tabbedPane;
+        private final java.awt.LayoutManager delegate;
+
+        TabPaneOverlayLayout(JTabbedPane tp) {
+            this.tabbedPane = tp;
+            this.delegate = tp.getLayout();
+        }
+
+        @Override
+        public void addLayoutComponent(String name, java.awt.Component comp) {
+            if (delegate != null) delegate.addLayoutComponent(name, comp);
+        }
+
+        @Override
+        public void removeLayoutComponent(java.awt.Component comp) {
+            if (delegate != null) delegate.removeLayoutComponent(comp);
+        }
+
+        @Override
+        public Dimension preferredLayoutSize(java.awt.Container parent) {
+            return delegate != null ? delegate.preferredLayoutSize(parent) : new Dimension(400, 300);
+        }
+
+        @Override
+        public Dimension minimumLayoutSize(java.awt.Container parent) {
+            return delegate != null ? delegate.minimumLayoutSize(parent) : new Dimension(200, 150);
+        }
+
+        @Override
+        public void layoutContainer(java.awt.Container parent) {
+            if (delegate != null) delegate.layoutContainer(parent);
+            // Reposition the media controls overlay after standard layout
+            if (tabbedPane.getParent() != null) {
+                for (java.awt.Component c : tabbedPane.getComponents()) {
+                    if (c instanceof JPanel && c.getPreferredSize().width < 200) {
+                        Dimension pref = c.getPreferredSize();
+                        int tabBarHeight = 28;
+                        if (tabbedPane.getTabCount() > 0) {
+                            java.awt.Rectangle tabBounds = tabbedPane.getBoundsAt(0);
+                            if (tabBounds != null) {
+                                tabBarHeight = tabBounds.height + tabBounds.y;
+                            }
+                        }
+                        int y = (tabBarHeight - pref.height) / 2;
+                        c.setBounds(tabbedPane.getWidth() - pref.width - 8, Math.max(0, y), pref.width, pref.height);
+                    }
+                }
+            }
+        }
     }
 
     private JPanel createStopwatchPanel() {
