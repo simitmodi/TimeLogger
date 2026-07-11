@@ -105,6 +105,19 @@ if ($hasJarExe) {
 
 Write-Host "Build successful: $jarPath"
 
+# Compile C# MediaController if csc is available
+$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if (-not (Test-Path $csc)) {
+    $csc = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+}
+if (Test-Path $csc) {
+    Write-Host "Compiling C# MediaController..."
+    & $csc /out:(Join-Path $root "mediacontrol.exe") (Join-Path $root "src\main\java\com\timelogger\MediaController.cs") | Out-Null
+    if (Test-Path (Join-Path $root "mediacontrol.exe")) {
+        Copy-Item -Path (Join-Path $root "mediacontrol.exe") -Destination (Join-Path $distDir "mediacontrol.exe") -Force
+    }
+}
+
 $appJarPath = Join-Path $root "dist\TimeLogger\app\time-logger.jar"
 if (Test-Path (Split-Path -Parent $appJarPath)) {
     try {
@@ -116,5 +129,13 @@ if (Test-Path (Split-Path -Parent $appJarPath)) {
         Start-Sleep -Milliseconds 500
         Copy-Item -Path $jarPath -Destination $appJarPath -Force
         Write-Host "Copied built JAR to native launcher app folder: $appJarPath"
+    }
+    
+    # Copy mediacontrol.exe to the native app folders
+    if (Test-Path (Join-Path $root "mediacontrol.exe")) {
+        $appFolder = Join-Path $root "dist\TimeLogger\app"
+        Copy-Item -Path (Join-Path $root "mediacontrol.exe") -Destination (Join-Path $appFolder "mediacontrol.exe") -Force
+        $appRootFolder = Join-Path $root "dist\TimeLogger"
+        Copy-Item -Path (Join-Path $root "mediacontrol.exe") -Destination (Join-Path $appRootFolder "mediacontrol.exe") -Force
     }
 }

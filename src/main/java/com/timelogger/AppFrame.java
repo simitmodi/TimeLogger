@@ -288,7 +288,7 @@ public class AppFrame extends JFrame {
 
         setJMenuBar(createMenuBar());
         setLayout(new BorderLayout());
-        add(createTabs(), BorderLayout.CENTER);
+        add(createTabbedPaneWithMediaOverlay(), BorderLayout.CENTER);
 
         refreshStopwatchSubjects();
         refreshQuestionTopicsDropdown();
@@ -467,29 +467,6 @@ public class AppFrame extends JFrame {
         helpMenu.add(shortcutsMenuItem);
         menuBar.add(helpMenu);
 
-        // Media controls — right-aligned in the menu bar (iTunes style)
-        menuBar.add(javax.swing.Box.createHorizontalGlue());
-
-        java.awt.Robot mediaRobot = null;
-        try { mediaRobot = new java.awt.Robot(); } catch (java.awt.AWTException ignored) {}
-        final java.awt.Robot robot = mediaRobot;
-
-        final int VK_MEDIA_PREV = 0xB1;
-        final int VK_MEDIA_PLAY_PAUSE = 0xB3;
-        final int VK_MEDIA_NEXT = 0xB0;
-
-        JButton prevBtn = createMediaButton("⏮", "Previous Track");
-        JButton playBtn = createMediaButton("⏯", "Play / Pause");
-        JButton nextBtn = createMediaButton("⏭", "Next Track");
-
-        prevBtn.addActionListener(e -> { if (robot != null) { robot.keyPress(VK_MEDIA_PREV); robot.keyRelease(VK_MEDIA_PREV); } });
-        playBtn.addActionListener(e -> { if (robot != null) { robot.keyPress(VK_MEDIA_PLAY_PAUSE); robot.keyRelease(VK_MEDIA_PLAY_PAUSE); } });
-        nextBtn.addActionListener(e -> { if (robot != null) { robot.keyPress(VK_MEDIA_NEXT); robot.keyRelease(VK_MEDIA_NEXT); } });
-
-        menuBar.add(prevBtn);
-        menuBar.add(playBtn);
-        menuBar.add(nextBtn);
-
         return menuBar;
     }
 
@@ -505,7 +482,83 @@ public class AppFrame extends JFrame {
         return tabs;
     }
 
-    private JButton createMediaButton(String symbol, String tooltip) {
+    private javax.swing.JComponent createTabbedPaneWithMediaOverlay() {
+        createTabs(); // Initializes this.tabs
+
+        JPanel mediaPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        mediaPanel.setOpaque(false);
+
+        JButton prevBtn = createMediaButton("⏮", "Previous Track", 26, 11);
+        JButton playBtn = createMediaButton("⏯", "Play / Pause", 30, 13);
+        JButton nextBtn = createMediaButton("⏭", "Next Track", 26, 11);
+
+        prevBtn.addActionListener(e -> sendMediaKey("prev"));
+        playBtn.addActionListener(e -> sendMediaKey("play"));
+        nextBtn.addActionListener(e -> sendMediaKey("next"));
+
+        mediaPanel.add(prevBtn);
+        mediaPanel.add(playBtn);
+        mediaPanel.add(nextBtn);
+
+        javax.swing.JLayeredPane layeredPane = new javax.swing.JLayeredPane();
+        layeredPane.setLayout(new java.awt.LayoutManager() {
+            @Override
+            public void addLayoutComponent(String name, java.awt.Component comp) {}
+            @Override
+            public void removeLayoutComponent(java.awt.Component comp) {}
+            @Override
+            public Dimension preferredLayoutSize(java.awt.Container parent) {
+                return tabs.getPreferredSize();
+            }
+            @Override
+            public Dimension minimumLayoutSize(java.awt.Container parent) {
+                return tabs.getMinimumSize();
+            }
+            @Override
+            public void layoutContainer(java.awt.Container parent) {
+                int width = parent.getWidth();
+                int height = parent.getHeight();
+                tabs.setBounds(0, 0, width, height);
+
+                Dimension pref = mediaPanel.getPreferredSize();
+                int tabBarHeight = 28;
+                if (tabs.getTabCount() > 0) {
+                    java.awt.Rectangle tabBounds = tabs.getBoundsAt(0);
+                    if (tabBounds != null) {
+                        tabBarHeight = tabBounds.height + tabBounds.y;
+                    }
+                }
+                int y = (tabBarHeight - pref.height) / 2;
+                mediaPanel.setBounds(width - pref.width - 12, Math.max(0, y), pref.width, pref.height);
+            }
+        });
+
+        layeredPane.add(tabs, javax.swing.JLayeredPane.DEFAULT_LAYER);
+        layeredPane.add(mediaPanel, javax.swing.JLayeredPane.PALETTE_LAYER);
+        return layeredPane;
+    }
+
+    private void sendMediaKey(String action) {
+        try {
+            String appDir = System.getProperty("user.dir");
+            java.io.File exeFile = new java.io.File(appDir, "mediacontrol.exe");
+            if (exeFile.exists()) {
+                Runtime.getRuntime().exec(new String[]{exeFile.getAbsolutePath(), action});
+            } else {
+                java.io.File jarFile = new java.io.File(AppFrame.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                java.io.File exeInJarDir = new java.io.File(jarFile.getParent(), "mediacontrol.exe");
+                if (exeInJarDir.exists()) {
+                    Runtime.getRuntime().exec(new String[]{exeInJarDir.getAbsolutePath(), action});
+                } else {
+                    Runtime.getRuntime().exec(new String[]{"mediacontrol.exe", action});
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private JButton createMediaButton(String symbol, String tooltip, int size, int fontSize) {
         JButton btn = new JButton() {
             private boolean isHovered = false;
             {
@@ -520,24 +573,50 @@ public class AppFrame extends JFrame {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                if (isHovered) {
-                    g2.setColor(new Color(0, 0, 0, 30));
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+                
+                ThemeManager.AppTheme theme = ThemeManager.loadTheme();
+                boolean isDark = (theme == ThemeManager.AppTheme.DARK || theme == ThemeManager.AppTheme.HIGH_CONTRAST);
+                Color circleColor = isDark ? new Color(255, 255, 255, 12) : new Color(0, 0, 0, 8);
+                Color hoverColor = isDark ? new Color(255, 255, 255, 30) : new Color(0, 0, 0, 20);
+                Color pressedColor = isDark ? new Color(255, 255, 255, 45) : new Color(0, 0, 0, 35);
+                
+                if (getModel().isPressed()) {
+                    g2.setColor(pressedColor);
+                } else if (isHovered) {
+                    g2.setColor(hoverColor);
+                } else {
+                    g2.setColor(circleColor);
                 }
+                
+                g2.fillOval(1, 1, getWidth() - 2, getHeight() - 2);
+                
+                // Thin border
+                g2.setColor(isDark ? new Color(255, 255, 255, 35) : new Color(0, 0, 0, 25));
+                g2.drawOval(1, 1, getWidth() - 2, getHeight() - 2);
+                
                 g2.dispose();
                 super.paintComponent(g);
             }
         };
         btn.setToolTipText(tooltip);
-        btn.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 16));
+        btn.setFont(new Font("Segoe UI Symbol", Font.PLAIN, fontSize));
         btn.setText(symbol);
+        btn.setHorizontalTextPosition(SwingConstants.CENTER);
+        btn.setVerticalTextPosition(SwingConstants.CENTER);
+        btn.setHorizontalAlignment(SwingConstants.CENTER);
+        btn.setVerticalAlignment(SwingConstants.CENTER);
+        
+        ThemeManager.AppTheme theme = ThemeManager.loadTheme();
+        boolean isDark = (theme == ThemeManager.AppTheme.DARK || theme == ThemeManager.AppTheme.HIGH_CONTRAST);
+        btn.setForeground(isDark ? Color.WHITE : new Color(60, 60, 60));
+        
         btn.setFocusPainted(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setOpaque(false);
         btn.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-        btn.setPreferredSize(new Dimension(32, 22));
-        btn.setMaximumSize(new Dimension(32, 22));
+        btn.setPreferredSize(new Dimension(size, size));
+        btn.setMaximumSize(new Dimension(size, size));
         return btn;
     }
 
