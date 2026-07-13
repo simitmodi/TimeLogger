@@ -3948,11 +3948,19 @@ public class AppFrame extends JFrame {
         // Attention span & focus score calculation
         double avgAttentionSpanMin = 0;
         double avgFocusScore = 0;
+        double avgAttentionSpanRatio = 1.0;
         if (!recentSessions.isEmpty()) {
             long totalActiveSec = recentSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
             long totalBlocks = recentSessions.stream().mapToLong(s -> getSessionPauseCount(s) + 1).sum();
             avgAttentionSpanMin = (totalActiveSec / (double) totalBlocks) / 60.0;
             avgFocusScore = recentSessions.stream().mapToInt(this::calculateSessionFocusScore).average().orElse(0.0);
+            avgAttentionSpanRatio = recentSessions.stream().mapToDouble(s -> {
+                long activeSec = s.getDurationSeconds();
+                int pauses = getSessionPauseCount(s);
+                double avgBlockMin = (activeSec / (double) (pauses + 1)) / 60.0;
+                double[] targets = getSessionOptimalMinTargets(s);
+                return Math.min(1.0, avgBlockMin / targets[0]);
+            }).average().orElse(1.0);
         }
 
         // Format focus score text with classification
@@ -3997,8 +4005,8 @@ public class AppFrame extends JFrame {
             hasMessages = true;
         }
         if (!recentSessions.isEmpty()) {
-            if (avgAttentionSpanMin < 25.0) {
-                addTipLabel("💡 Focus Tip: Short focus blocks. Try Pomodoro (25 mins focus / 5 mins break).");
+            if (avgAttentionSpanMin < 25.0 && avgAttentionSpanRatio < 0.8) {
+                addTipLabel("💡 Focus Tip: Study blocks are shorter than recommended for these activities. Try to minimize interruptions.");
                 hasMessages = true;
             } else if (avgAttentionSpanMin > 120.0) {
                 addTipLabel("💡 Focus Tip: Very long focus blocks (> 2 hrs). Remember to take a rest every hour.");
@@ -4055,25 +4063,50 @@ public class AppFrame extends JFrame {
         return (int) Math.max(1, breakSec / 300);
     }
 
-    private int calculateSessionFocusScore(SessionRecord s) {
+    private double[] getSessionOptimalMinTargets(SessionRecord s) {
         String desc = s.getDescription() != null ? s.getDescription() : "";
-        if (desc.startsWith("Questions: ")) {
-            return 100;
+        double minTarget = 25.0;
+        double maxTarget = 120.0;
+        
+        if (desc.startsWith("Lecture: ")) {
+            minTarget = 45.0;
+            maxTarget = 150.0;
+        } else if (desc.startsWith("Revision: ")) {
+            minTarget = 20.0;
+            maxTarget = 50.0;
+        } else if (desc.startsWith("Questions: ")) {
+            String lower = desc.toLowerCase();
+            if (lower.contains("dpp") || lower.contains("daily practice") || lower.contains("solved: 1") || lower.contains("solved: 2") || lower.contains("solved: 3") || lower.contains("solved: 4") || lower.contains("solved: 5") || lower.contains("solved: 6") || lower.contains("solved: 7") || lower.contains("solved: 8") || lower.contains("solved: 9") || (lower.contains("solved: 1") && !lower.contains("solved: 16") && !lower.contains("solved: 17") && !lower.contains("solved: 18") && !lower.contains("solved: 19"))) {
+                // DPP / short question sessions (11-15 questions, ~15-20 min)
+                minTarget = 15.0;
+                maxTarget = 40.0;
+            } else {
+                // Practice / PYQ sessions (20-30 questions, ~40-50 min)
+                minTarget = 25.0;
+                maxTarget = 75.0;
+            }
         }
+        return new double[]{minTarget, maxTarget};
+    }
 
+    private int calculateSessionFocusScore(SessionRecord s) {
         long activeSec = s.getDurationSeconds();
         if (activeSec < 60) return 100; // Ignore tiny sessions under a minute
+        
+        double[] targets = getSessionOptimalMinTargets(s);
+        double minTarget = targets[0];
+        double maxTarget = targets[1];
         
         int pauses = getSessionPauseCount(s);
         double avgBlockMin = (activeSec / (double) (pauses + 1)) / 60.0;
         
         double blockScore;
-        if (avgBlockMin >= 25 && avgBlockMin <= 120) {
+        if (avgBlockMin >= minTarget && avgBlockMin <= maxTarget) {
             blockScore = 100;
-        } else if (avgBlockMin < 25) {
-            blockScore = Math.max(20, 100 - (25 - avgBlockMin) * 3);
+        } else if (avgBlockMin < minTarget) {
+            blockScore = Math.max(20, 100 - (minTarget - avgBlockMin) * (80.0 / minTarget));
         } else {
-            blockScore = Math.max(50, 100 - (avgBlockMin - 120) * 0.5);
+            blockScore = Math.max(50, 100 - (avgBlockMin - maxTarget) * 0.5);
         }
         
         long spanSec = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toSeconds();
