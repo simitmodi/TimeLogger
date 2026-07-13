@@ -232,6 +232,7 @@ public class AppFrame extends JFrame {
     });
     private JComboBox<String> questionsTopicFilterCombo;
     private JComboBox<String> questionsSubjectFilterCombo;
+    private JComboBox<String> activitySubjectFilterCombo;
     private ScientificCalculator scientificCalculator;
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
@@ -1344,6 +1345,19 @@ public class AppFrame extends JFrame {
         activityTable.setRowHeight(24);
         JPanel activityCard = new JPanel(new BorderLayout(8, 8));
         activityCard.setBorder(BorderFactory.createTitledBorder("By Activity"));
+        
+        JPanel activityFilterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        activityFilterPanel.setOpaque(false);
+        JLabel actSubLbl = new JLabel("Subject:");
+        actSubLbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        
+        activitySubjectFilterCombo = new JComboBox<>();
+        activitySubjectFilterCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        activitySubjectFilterCombo.addActionListener(e -> refreshAnalysis());
+        activityFilterPanel.add(actSubLbl);
+        activityFilterPanel.add(activitySubjectFilterCombo);
+        activityCard.add(activityFilterPanel, BorderLayout.NORTH);
+        
         JScrollPane activityScroll = new JScrollPane(activityTable);
         activityScroll.setPreferredSize(new Dimension(200, 140));
         activityCard.add(activityScroll, BorderLayout.CENTER);
@@ -1980,23 +1994,33 @@ public class AppFrame extends JFrame {
             questionsSubjectFilter = (String) questionsSubjectFilterCombo.getSelectedItem();
             if (questionsSubjectFilter == null) questionsSubjectFilter = "All Subjects";
         }
+        
+        String activitySubjectFilter = "All Subjects";
+        if (activitySubjectFilterCombo != null) {
+            activitySubjectFilter = (String) activitySubjectFilterCombo.getSelectedItem();
+            if (activitySubjectFilter == null) activitySubjectFilter = "All Subjects";
+        }
 
         for (SessionRecord session : sessions) {
             String desc = session.getDescription() != null ? session.getDescription() : "";
             long sec = session.getDurationSeconds();
+            boolean matchesActivitySubject = "All Subjects".equals(activitySubjectFilter) || session.getSubject().equalsIgnoreCase(activitySubjectFilter);
+
             if (desc.startsWith("Questions: ")) {
                 String qType = desc.substring("Questions: ".length());
-                if (qType.startsWith("DPP Questions")) {
-                    dppSec += sec;
-                    dppQ += session.getQuestionsSolved();
-                } else if (qType.startsWith("Practice Book Questions")) {
-                    practiceSec += sec;
-                    practiceQ += session.getQuestionsSolved();
-                } else if (qType.startsWith("Previous Year Questions")) {
-                    pyqSec += sec;
-                    pyqQ += session.getQuestionsSolved();
-                } else {
-                    generalSec += sec;
+                if (matchesActivitySubject) {
+                    if (qType.startsWith("DPP Questions")) {
+                        dppSec += sec;
+                        dppQ += session.getQuestionsSolved();
+                    } else if (qType.startsWith("Practice Book Questions")) {
+                        practiceSec += sec;
+                        practiceQ += session.getQuestionsSolved();
+                    } else if (qType.startsWith("Previous Year Questions")) {
+                        pyqSec += sec;
+                        pyqQ += session.getQuestionsSolved();
+                    } else {
+                        generalSec += sec;
+                    }
                 }
 
                 boolean includeTopic = false;
@@ -2030,12 +2054,16 @@ public class AppFrame extends JFrame {
                     }
                 }
             } else if (desc.startsWith("Revision: ")) {
-                String topic = desc.substring("Revision: ".length()).trim();
-                if (topic.isEmpty()) topic = "General/Unnamed";
-                byRevisionTopic.put(topic, byRevisionTopic.getOrDefault(topic, 0L) + sec);
-                revisionSec += sec;
+                if (matchesActivitySubject) {
+                    String topic = desc.substring("Revision: ".length()).trim();
+                    if (topic.isEmpty()) topic = "General/Unnamed";
+                    byRevisionTopic.put(topic, byRevisionTopic.getOrDefault(topic, 0L) + sec);
+                    revisionSec += sec;
+                }
             } else if (!desc.startsWith("Lecture: ")) {
-                generalSec += sec;
+                if (matchesActivitySubject) {
+                    generalSec += sec;
+                }
             }
         }
  
@@ -2888,20 +2916,38 @@ public class AppFrame extends JFrame {
     }
 
     private void refreshQuestionsSubjectFilterCombo() {
-        if (questionsSubjectFilterCombo == null) return;
-        String previous = (String) questionsSubjectFilterCombo.getSelectedItem();
-        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-        model.addElement("All Subjects");
-        List<String> sorted = getSubjectsSortedByUsage();
-        for (String subject : sorted) {
-            model.addElement(subject);
-        }
-        questionsSubjectFilterCombo.setModel(model);
+        if (questionsSubjectFilterCombo != null) {
+            String previous = (String) questionsSubjectFilterCombo.getSelectedItem();
+            DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+            model.addElement("All Subjects");
+            List<String> sorted = getSubjectsSortedByUsage();
+            for (String subject : sorted) {
+                model.addElement(subject);
+            }
+            questionsSubjectFilterCombo.setModel(model);
 
-        if (previous != null) {
-            questionsSubjectFilterCombo.setSelectedItem(previous);
-        } else {
-            questionsSubjectFilterCombo.setSelectedIndex(0);
+            if (previous != null) {
+                questionsSubjectFilterCombo.setSelectedItem(previous);
+            } else {
+                questionsSubjectFilterCombo.setSelectedIndex(0);
+            }
+        }
+
+        if (activitySubjectFilterCombo != null) {
+            String previous = (String) activitySubjectFilterCombo.getSelectedItem();
+            DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+            model.addElement("All Subjects");
+            List<String> sorted = getSubjectsSortedByUsage();
+            for (String subject : sorted) {
+                model.addElement(subject);
+            }
+            activitySubjectFilterCombo.setModel(model);
+
+            if (previous != null) {
+                activitySubjectFilterCombo.setSelectedItem(previous);
+            } else {
+                activitySubjectFilterCombo.setSelectedIndex(0);
+            }
         }
     }
 
