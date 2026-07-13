@@ -231,6 +231,7 @@ public class AppFrame extends JFrame {
         "All Time", "Today", "Yesterday", "This Week", "Last 7 Days", "This Month", "Last 30 Days", "Custom Range..."
     });
     private JComboBox<String> questionsTopicFilterCombo;
+    private JComboBox<String> questionsSubjectFilterCombo;
     private ScientificCalculator scientificCalculator;
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
@@ -1360,10 +1361,27 @@ public class AppFrame extends JFrame {
         JPanel questionsTopicCard = new JPanel(new BorderLayout(8, 8));
         questionsTopicCard.setBorder(BorderFactory.createTitledBorder("Questions Solved by Topic"));
         
-        JPanel topicFilterPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
-        topicFilterPanel.setOpaque(false);
-        JLabel filterLbl = new JLabel("Filter:");
-        filterLbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        JPanel filterHeaderPanel = new JPanel(new BorderLayout());
+        filterHeaderPanel.setOpaque(false);
+        
+        // Subject Filter on Left
+        JPanel leftFilterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        leftFilterPanel.setOpaque(false);
+        JLabel subFilterLbl = new JLabel("Subject:");
+        subFilterLbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        
+        questionsSubjectFilterCombo = new JComboBox<>();
+        questionsSubjectFilterCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        questionsSubjectFilterCombo.addActionListener(e -> refreshAnalysis());
+        leftFilterPanel.add(subFilterLbl);
+        leftFilterPanel.add(questionsSubjectFilterCombo);
+        filterHeaderPanel.add(leftFilterPanel, BorderLayout.WEST);
+        
+        // Question Type Filter on Right
+        JPanel rightFilterPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
+        rightFilterPanel.setOpaque(false);
+        JLabel typeFilterLbl = new JLabel("Type:");
+        typeFilterLbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
         
         questionsTopicFilterCombo = new JComboBox<>(new String[]{
             "All (Practice & PYQ)",
@@ -1372,10 +1390,11 @@ public class AppFrame extends JFrame {
         });
         questionsTopicFilterCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
         questionsTopicFilterCombo.addActionListener(e -> refreshAnalysis());
+        rightFilterPanel.add(typeFilterLbl);
+        rightFilterPanel.add(questionsTopicFilterCombo);
+        filterHeaderPanel.add(rightFilterPanel, BorderLayout.EAST);
         
-        topicFilterPanel.add(filterLbl);
-        topicFilterPanel.add(questionsTopicFilterCombo);
-        questionsTopicCard.add(topicFilterPanel, BorderLayout.NORTH);
+        questionsTopicCard.add(filterHeaderPanel, BorderLayout.NORTH);
         
         JScrollPane questionsTopicScroll = new JScrollPane(questionsTopicTable);
         questionsTopicScroll.setPreferredSize(new Dimension(200, 140));
@@ -1955,6 +1974,12 @@ public class AppFrame extends JFrame {
             topicFilter = (String) questionsTopicFilterCombo.getSelectedItem();
             if (topicFilter == null) topicFilter = "All (Practice & PYQ)";
         }
+        
+        String questionsSubjectFilter = "All Subjects";
+        if (questionsSubjectFilterCombo != null) {
+            questionsSubjectFilter = (String) questionsSubjectFilterCombo.getSelectedItem();
+            if (questionsSubjectFilter == null) questionsSubjectFilter = "All Subjects";
+        }
 
         for (SessionRecord session : sessions) {
             String desc = session.getDescription() != null ? session.getDescription() : "";
@@ -1984,22 +2009,25 @@ public class AppFrame extends JFrame {
                 }
 
                 if (includeTopic) {
-                    // Parse the topic (qDesc) from the description
-                    String content = desc.substring("Questions: ".length());
-                    int solvedIdx = content.indexOf(" (Solved:");
-                    if (solvedIdx != -1) {
-                        content = content.substring(0, solvedIdx);
+                    boolean subjectMatches = "All Subjects".equals(questionsSubjectFilter) || session.getSubject().equalsIgnoreCase(questionsSubjectFilter);
+                    if (subjectMatches) {
+                        // Parse the topic (qDesc) from the description
+                        String content = desc.substring("Questions: ".length());
+                        int solvedIdx = content.indexOf(" (Solved:");
+                        if (solvedIdx != -1) {
+                            content = content.substring(0, solvedIdx);
+                        }
+                        String qDesc = "";
+                        int commaIdx = content.indexOf(',');
+                        if (commaIdx != -1) {
+                            qDesc = content.substring(commaIdx + 1).trim();
+                        }
+                        if (qDesc.isEmpty()) {
+                            qDesc = "General / Unnamed";
+                        }
+                        byQuestionTopicDuration.put(qDesc, byQuestionTopicDuration.getOrDefault(qDesc, 0L) + sec);
+                        byQuestionTopicSolved.put(qDesc, byQuestionTopicSolved.getOrDefault(qDesc, 0) + session.getQuestionsSolved());
                     }
-                    String qDesc = "";
-                    int commaIdx = content.indexOf(',');
-                    if (commaIdx != -1) {
-                        qDesc = content.substring(commaIdx + 1).trim();
-                    }
-                    if (qDesc.isEmpty()) {
-                        qDesc = "General / Unnamed";
-                    }
-                    byQuestionTopicDuration.put(qDesc, byQuestionTopicDuration.getOrDefault(qDesc, 0L) + sec);
-                    byQuestionTopicSolved.put(qDesc, byQuestionTopicSolved.getOrDefault(qDesc, 0) + session.getQuestionsSolved());
                 }
             } else if (desc.startsWith("Revision: ")) {
                 String topic = desc.substring("Revision: ".length()).trim();
@@ -2855,6 +2883,25 @@ public class AppFrame extends JFrame {
             logsSubjectFilterCombo.setSelectedItem(previous);
         } else {
             logsSubjectFilterCombo.setSelectedIndex(0);
+        }
+        refreshQuestionsSubjectFilterCombo();
+    }
+
+    private void refreshQuestionsSubjectFilterCombo() {
+        if (questionsSubjectFilterCombo == null) return;
+        String previous = (String) questionsSubjectFilterCombo.getSelectedItem();
+        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        model.addElement("All Subjects");
+        List<String> sorted = getSubjectsSortedByUsage();
+        for (String subject : sorted) {
+            model.addElement(subject);
+        }
+        questionsSubjectFilterCombo.setModel(model);
+
+        if (previous != null) {
+            questionsSubjectFilterCombo.setSelectedItem(previous);
+        } else {
+            questionsSubjectFilterCombo.setSelectedIndex(0);
         }
     }
 
