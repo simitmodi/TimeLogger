@@ -657,7 +657,7 @@ public class ScientificCalculator extends JDialog {
             if (history.isEmpty()) {
                 exprToEvaluate = current;
             } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot")) {
-                exprToEvaluate = history + " " + current;
+                exprToEvaluate = history + current;
             } else {
                 exprToEvaluate = history;
             }
@@ -683,7 +683,7 @@ public class ScientificCalculator extends JDialog {
                 if (history.isEmpty()) {
                     historyField.setText(funcHist);
                 } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot")) {
-                    historyField.setText(history + " " + funcHist);
+                    historyField.setText(history + funcHist);
                 } else {
                     historyField.setText(funcHist);
                 }
@@ -701,14 +701,20 @@ public class ScientificCalculator extends JDialog {
             boolean endsWithOp = history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^") || history.endsWith("yroot");
             
             if (history.isEmpty() || !endsWithOp) {
-                historyField.setText(current + " " + op);
+                historyField.setText(current + op);
             } else {
-                // Replace last operator
-                int lastSpace = history.lastIndexOf(' ');
-                if (lastSpace != -1) {
-                    historyField.setText(history.substring(0, lastSpace) + " " + op);
+                if (!isFreshInput) {
+                    // The user entered a new number, so append it and then the new operator
+                    historyField.setText(history + current + op);
                 } else {
-                    historyField.setText(current + " " + op);
+                    // The user clicked operators sequentially without typing a number, so replace the last operator
+                    String base = history;
+                    if (history.endsWith("yroot")) {
+                        base = history.substring(0, history.length() - 5);
+                    } else if (history.endsWith("+") || history.endsWith("-") || history.endsWith("*") || history.endsWith("/") || history.endsWith("%") || history.endsWith("^")) {
+                        base = history.substring(0, history.length() - 1);
+                    }
+                    historyField.setText(base + op);
                 }
             }
             isFreshInput = true;
@@ -735,10 +741,10 @@ public class ScientificCalculator extends JDialog {
                     if (history.isEmpty()) {
                         historyField.setText("(");
                     } else {
-                        historyField.setText(history + " (");
+                        historyField.setText(history + "(");
                     }
                 } else {
-                    historyField.setText(history + " " + current + ")");
+                    historyField.setText(history + current + ")");
                 }
                 isFreshInput = true;
             } else {
