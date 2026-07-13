@@ -3950,10 +3950,15 @@ public class AppFrame extends JFrame {
         double avgFocusScore = 0;
         double avgAttentionSpanRatio = 1.0;
         if (!recentSessions.isEmpty()) {
-            long totalActiveSec = recentSessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
-            long totalBlocks = recentSessions.stream().mapToLong(s -> getSessionPauseCount(s) + 1).sum();
-            avgAttentionSpanMin = (totalActiveSec / (double) totalBlocks) / 60.0;
             avgFocusScore = recentSessions.stream().mapToInt(this::calculateSessionFocusScore).average().orElse(0.0);
+            avgAttentionSpanMin = recentSessions.stream().mapToDouble(s -> {
+                long activeSec = s.getDurationSeconds();
+                int pauses = getSessionPauseCount(s);
+                double avgBlockMin = (activeSec / (double) (pauses + 1)) / 60.0;
+                double[] targets = getSessionOptimalMinTargets(s);
+                double minTarget = targets[0];
+                return avgBlockMin * (35.0 / minTarget);
+            }).average().orElse(0.0);
             avgAttentionSpanRatio = recentSessions.stream().mapToDouble(s -> {
                 long activeSec = s.getDurationSeconds();
                 int pauses = getSessionPauseCount(s);
@@ -4869,9 +4874,15 @@ public class AppFrame extends JFrame {
         double avgAttentionSpanMin = 0;
         double avgFocusScore = 0;
         if (!recentSessions.isEmpty()) {
-            long totalBlocks = recentSessions.stream().mapToLong(s -> getSessionPauseCount(s) + 1).sum();
-            avgAttentionSpanMin = (totalActiveSec / (double) totalBlocks) / 60.0;
             avgFocusScore = recentSessions.stream().mapToInt(this::calculateSessionFocusScore).average().orElse(0.0);
+            avgAttentionSpanMin = recentSessions.stream().mapToDouble(s -> {
+                long activeSec = s.getDurationSeconds();
+                int pauses = getSessionPauseCount(s);
+                double avgBlockMin = (activeSec / (double) (pauses + 1)) / 60.0;
+                double[] targets = getSessionOptimalMinTargets(s);
+                double minTarget = targets[0];
+                return avgBlockMin * (35.0 / minTarget);
+            }).average().orElse(0.0);
         }
         sb.append("- Avg Attention Span: ").append(String.format("%.1f mins\n", avgAttentionSpanMin));
         sb.append("- Cognitive Focus Score: ").append(String.format("%.1f / 100\n", avgFocusScore));
