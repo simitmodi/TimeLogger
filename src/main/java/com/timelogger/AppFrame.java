@@ -1541,6 +1541,173 @@ public class AppFrame extends JFrame {
         panel.add(scrollPane, BorderLayout.CENTER);
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
+        // Add double-click listeners to analysis JTables to drill down to session lists
+        addTableDoubleClickListener(subjectTable, row -> {
+            String subjectName = (String) subjectAnalysisModel.getValueAt(row, 0);
+            List<SessionRecord> rawSessionsList = storageService.loadSessions();
+            List<SessionRecord> filtered = rawSessionsList.stream()
+                .filter(s -> s.getSubject().equalsIgnoreCase(subjectName))
+                .collect(Collectors.toList());
+            showSessionsDialog("Sessions for Subject: " + subjectName, filtered);
+        });
+
+        addTableDoubleClickListener(chapterTable, row -> {
+            String rowKey = (String) chapterAnalysisModel.getValueAt(row, 0);
+            List<SessionRecord> rawSessionsList = storageService.loadSessions();
+            List<SessionRecord> filtered = rawSessionsList.stream()
+                .filter(s -> {
+                    String desc = s.getDescription() != null ? s.getDescription() : "";
+                    if (!desc.startsWith("Lecture: ")) return false;
+                    String chName = "Unknown Chapter";
+                    int chStart = desc.indexOf("Ch ");
+                    if (chStart != -1) {
+                        int commaIndex = desc.indexOf(",", chStart);
+                        if (commaIndex != -1) {
+                            chName = desc.substring(chStart, commaIndex).trim();
+                        } else {
+                            chName = desc.substring(chStart).trim();
+                        }
+                    }
+                    String key = s.getSubject() + " - " + chName;
+                    return key.equalsIgnoreCase(rowKey);
+                })
+                .collect(Collectors.toList());
+            showSessionsDialog("Sessions for Chapter: " + rowKey, filtered);
+        });
+
+        addTableDoubleClickListener(activityTable, row -> {
+            String activityType = (String) activityAnalysisModel.getValueAt(row, 0);
+            String activitySubjectFilter = "All Subjects";
+            if (activitySubjectFilterCombo != null) {
+                activitySubjectFilter = (String) activitySubjectFilterCombo.getSelectedItem();
+                if (activitySubjectFilter == null) activitySubjectFilter = "All Subjects";
+            }
+            final String finalSub = activitySubjectFilter;
+            
+            List<SessionRecord> periodSessions = getFilteredSessionsForPeriod((String) analysisPeriodCombo.getSelectedItem());
+            List<SessionRecord> filtered = periodSessions.stream()
+                .filter(s -> {
+                    if (!"All Subjects".equals(finalSub) && !s.getSubject().equalsIgnoreCase(finalSub)) {
+                        return false;
+                    }
+                    String desc = s.getDescription() != null ? s.getDescription() : "";
+                    if (activityType.equals("DPP Questions")) {
+                        return desc.startsWith("Questions: ") && desc.substring("Questions: ".length()).startsWith("DPP Questions");
+                    } else if (activityType.equals("Practice Book Questions")) {
+                        return desc.startsWith("Questions: ") && desc.substring("Questions: ".length()).startsWith("Practice Book Questions");
+                    } else if (activityType.equals("Previous Year Questions")) {
+                        return desc.startsWith("Questions: ") && desc.substring("Questions: ".length()).startsWith("Previous Year Questions");
+                    } else if (activityType.equals("Revision (Total)")) {
+                        return desc.startsWith("Revision: ");
+                    } else if (activityType.equals("General / Other")) {
+                        return !desc.startsWith("Questions: ") && !desc.startsWith("Revision: ") && !desc.startsWith("Lecture: ");
+                    }
+                    return false;
+                })
+                .collect(Collectors.toList());
+            showSessionsDialog("Sessions for Activity: " + activityType, filtered);
+        });
+
+        addTableDoubleClickListener(revisionTable, row -> {
+            String topicName = (String) revisionAnalysisModel.getValueAt(row, 0);
+            String activitySubjectFilter = "All Subjects";
+            if (activitySubjectFilterCombo != null) {
+                activitySubjectFilter = (String) activitySubjectFilterCombo.getSelectedItem();
+                if (activitySubjectFilter == null) activitySubjectFilter = "All Subjects";
+            }
+            final String finalSub = activitySubjectFilter;
+            
+            List<SessionRecord> periodSessions = getFilteredSessionsForPeriod((String) analysisPeriodCombo.getSelectedItem());
+            List<SessionRecord> filtered = periodSessions.stream()
+                .filter(s -> {
+                    if (!"All Subjects".equals(finalSub) && !s.getSubject().equalsIgnoreCase(finalSub)) {
+                        return false;
+                    }
+                    String desc = s.getDescription() != null ? s.getDescription() : "";
+                    if (!desc.startsWith("Revision: ")) return false;
+                    String topic = desc.substring("Revision: ".length()).trim();
+                    if (topic.isEmpty()) topic = "General/Unnamed";
+                    return topic.equalsIgnoreCase(topicName);
+                })
+                .collect(Collectors.toList());
+            showSessionsDialog("Sessions for Revision Topic: " + topicName, filtered);
+        });
+
+        addTableDoubleClickListener(questionsTopicTable, row -> {
+            String topicName = (String) questionsByTopicAnalysisModel.getValueAt(row, 0);
+            String questionsSubjectFilter = "All Subjects";
+            if (questionsSubjectFilterCombo != null) {
+                questionsSubjectFilter = (String) questionsSubjectFilterCombo.getSelectedItem();
+                if (questionsSubjectFilter == null) questionsSubjectFilter = "All Subjects";
+            }
+            final String finalSub = questionsSubjectFilter;
+            
+            String topicFilter = "All (Practice & PYQ)";
+            if (questionsTopicFilterCombo != null) {
+                topicFilter = (String) questionsTopicFilterCombo.getSelectedItem();
+                if (topicFilter == null) topicFilter = "All (Practice & PYQ)";
+            }
+            final String finalType = topicFilter;
+            
+            List<SessionRecord> periodSessions = getFilteredSessionsForPeriod((String) analysisPeriodCombo.getSelectedItem());
+            List<SessionRecord> filtered = periodSessions.stream()
+                .filter(s -> {
+                    if (!"All Subjects".equals(finalSub) && !s.getSubject().equalsIgnoreCase(finalSub)) {
+                        return false;
+                    }
+                    String desc = s.getDescription() != null ? s.getDescription() : "";
+                    if (!desc.startsWith("Questions: ")) return false;
+                    
+                    String qType = desc.substring("Questions: ".length());
+                    boolean includeType = false;
+                    if ("All (Practice & PYQ)".equals(finalType)) {
+                        includeType = qType.startsWith("Practice Book Questions") || qType.startsWith("Previous Year Questions");
+                    } else if ("Practice Book".equals(finalType)) {
+                        includeType = qType.startsWith("Practice Book Questions");
+                    } else if ("Previous Year".equals(finalType)) {
+                        includeType = qType.startsWith("Previous Year Questions");
+                    }
+                    if (!includeType) return false;
+                    
+                    String content = desc.substring("Questions: ".length());
+                    int solvedIdx = content.indexOf(" (Solved:");
+                    if (solvedIdx != -1) {
+                        content = content.substring(0, solvedIdx);
+                    }
+                    String qDesc = "";
+                    int commaIdx = content.indexOf(',');
+                    if (commaIdx != -1) {
+                        qDesc = content.substring(commaIdx + 1).trim();
+                    }
+                    if (qDesc.isEmpty()) {
+                        qDesc = "General / Unnamed";
+                    }
+                    return qDesc.equalsIgnoreCase(topicName);
+                })
+                .collect(Collectors.toList());
+            showSessionsDialog("Sessions for Question Topic: " + topicName, filtered);
+        });
+
+        addTableDoubleClickListener(dailyXpTable, row -> {
+            String dateStr = (String) dailyXpAnalysisModel.getValueAt(row, 0);
+            int parenIdx = dateStr.indexOf(" (");
+            if (parenIdx != -1) {
+                dateStr = dateStr.substring(0, parenIdx);
+            }
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM);
+            LocalDate targetDate;
+            try {
+                targetDate = LocalDate.parse(dateStr, formatter);
+            } catch (Exception ex) {
+                return;
+            }
+            List<SessionRecord> rawSessionsList = storageService.loadSessions();
+            List<SessionRecord> filtered = rawSessionsList.stream()
+                .filter(s -> s.getStartTime().toLocalDate().equals(targetDate))
+                .collect(Collectors.toList());
+            showSessionsDialog("Sessions for " + dateStr, filtered);
+        });
+
         return panel;
     }
 
@@ -1647,31 +1814,7 @@ public class AppFrame extends JFrame {
                 break;
         }
 
-        List<SessionRecord> sessions = rawSessions.stream()
-            .filter(s -> {
-                LocalDate sDate = s.getStartTime().toLocalDate();
-                switch (finalPeriod) {
-                    case "Today":
-                        return sDate.equals(today);
-                    case "Yesterday":
-                        return sDate.equals(today.minusDays(1));
-                    case "This Week":
-                        LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
-                        return !sDate.isBefore(startOfWeek) && !sDate.isAfter(today);
-                    case "Last 7 Days":
-                        return !sDate.isBefore(today.minusDays(6)) && !sDate.isAfter(today);
-                    case "This Month":
-                        return sDate.getYear() == today.getYear() && sDate.getMonth() == today.getMonth();
-                    case "Last 30 Days":
-                        return !sDate.isBefore(today.minusDays(29)) && !sDate.isAfter(today);
-                    default:
-                        if (finalPeriod.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
-                            return !sDate.isBefore(customAnalysisStartDate) && !sDate.isAfter(customAnalysisEndDate);
-                        }
-                        return true; // All Time
-                }
-            })
-            .collect(Collectors.toList());
+        List<SessionRecord> sessions = getFilteredSessionsForPeriod(finalPeriod);
         
         int totalSessions = sessions.size();
         long totalSeconds = sessions.stream().mapToLong(SessionRecord::getDurationSeconds).sum();
@@ -2208,6 +2351,111 @@ public class AppFrame extends JFrame {
                 Collectors.summingLong(SessionRecord::getDurationSeconds)
             ));
         heatmapPanel.setData(dailyDurations);
+    }
+
+    private List<SessionRecord> getFilteredSessionsForPeriod(String period) {
+        List<SessionRecord> rawSessions = storageService.loadSessions();
+        LocalDate today = LocalDate.now();
+        return rawSessions.stream()
+            .filter(s -> {
+                LocalDate sDate = s.getStartTime().toLocalDate();
+                switch (period) {
+                    case "Today":
+                        return sDate.equals(today);
+                    case "Yesterday":
+                        return sDate.equals(today.minusDays(1));
+                    case "This Week":
+                        LocalDate startOfWeek = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                        return !sDate.isBefore(startOfWeek) && !sDate.isAfter(today);
+                    case "Last 7 Days":
+                        return !sDate.isBefore(today.minusDays(6)) && !sDate.isAfter(today);
+                    case "This Month":
+                        return sDate.getYear() == today.getYear() && sDate.getMonth() == today.getMonth();
+                    case "Last 30 Days":
+                        return !sDate.isBefore(today.minusDays(29)) && !sDate.isAfter(today);
+                    default:
+                        if (period.startsWith("Custom: ") && customAnalysisStartDate != null && customAnalysisEndDate != null) {
+                            return !sDate.isBefore(customAnalysisStartDate) && !sDate.isAfter(customAnalysisEndDate);
+                        }
+                        return true; // All Time
+                }
+            })
+            .collect(Collectors.toList());
+    }
+
+    private void showSessionsDialog(String title, List<SessionRecord> filteredSessions) {
+        javax.swing.JDialog dialog = new javax.swing.JDialog(this, title, true);
+        dialog.setSize(750, 450);
+        dialog.setLocationRelativeTo(this);
+        
+        JPanel mainPanel = new JPanel(new BorderLayout(12, 12));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        
+        JLabel headerLabel = new JLabel("Recorded Sessions: " + filteredSessions.size() + " found");
+        headerLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        mainPanel.add(headerLabel, BorderLayout.NORTH);
+        
+        String[] columnNames = {"Start Time", "Subject", "Duration", "Description", "Pauses", "Questions"};
+        DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int col) {
+                return false;
+            }
+        };
+        
+        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        for (SessionRecord s : filteredSessions) {
+            model.addRow(new Object[]{
+                s.getStartTime().format(formatter),
+                s.getSubject(),
+                formatDuration(s.getDurationSeconds()),
+                s.getDescription() != null ? s.getDescription() : "",
+                s.getPauseCount(),
+                s.getQuestionsSolved() > 0 ? String.valueOf(s.getQuestionsSolved()) : "-"
+            });
+        }
+        
+        JTable table = new JTable(model);
+        table.setRowHeight(24);
+        
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+        table.setBackground(colors.cardBg);
+        table.setForeground(colors.text);
+        table.getTableHeader().setBackground(colors.buttonBg);
+        table.getTableHeader().setForeground(colors.text);
+        
+        mainPanel.add(new JScrollPane(table), BorderLayout.CENTER);
+        
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton closeButton = new JButton("Close");
+        closeButton.addActionListener(e -> dialog.dispose());
+        buttonPanel.add(closeButton);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        mainPanel.setBackground(colors.bg);
+        headerLabel.setForeground(colors.text);
+        buttonPanel.setBackground(colors.bg);
+        closeButton.setBackground(colors.accent);
+        closeButton.setForeground(java.awt.Color.WHITE);
+        closeButton.setFocusPainted(false);
+        
+        dialog.setContentPane(mainPanel);
+        dialog.setVisible(true);
+    }
+
+    private void addTableDoubleClickListener(JTable table, java.util.function.Consumer<Integer> onDoubleClicked) {
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int row = table.getSelectedRow();
+                    if (row != -1) {
+                        int modelRow = table.convertRowIndexToModel(row);
+                        onDoubleClicked.accept(modelRow);
+                    }
+                }
+            }
+        });
     }
 
     public void startStopwatch() {
