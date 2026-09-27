@@ -265,10 +265,12 @@ public class AppFrame extends JFrame {
     private javax.swing.border.TitledBorder timelineBorder;
     private JPanel stopwatchConfigPanel;
     private JPanel timerConfigPanel;
+    private final Timer heartbeatTimer;
+    private volatile boolean isCleanExitInProgress = false;
 
     public AppFrame() {
         setTitle("Time Logger");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(980, 680));
         setLocationRelativeTo(null);
 
@@ -313,8 +315,24 @@ public class AppFrame extends JFrame {
 
         initSystemTray();
 
-        // Register shutdown hook to cleanly remove tray icon on VM shutdown
-        Runtime.getRuntime().addShutdownHook(new Thread(this::cleanupSystemTray));
+        // Heartbeat timer every 5 seconds to persist active session state
+        this.heartbeatTimer = new Timer(5000, e -> persistCurrentActiveSession());
+        this.heartbeatTimer.start();
+
+        // Register shutdown hook: if active session exists and exit wasn't clean, alert user of crash/preservation
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (stopwatchStarted || timerStarted) {
+                    persistCurrentActiveSession();
+                }
+                if (storageService.hasActiveSessionState()) {
+                    if (!isCleanExitInProgress) {
+                        spawnWindowsNotification("TimeLogger Alert", "TimeLogger closed unexpectedly! Your active study session was safely preserved.", "warning");
+                    }
+                }
+            } catch (Exception ignored) {}
+            cleanupSystemTray();
+        }));
 
         this.tabs.addChangeListener(e -> {
             int selectedIdx = tabs.getSelectedIndex();
@@ -354,11 +372,7 @@ public class AppFrame extends JFrame {
         this.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent e) {
-                saveChatHistory();
-                cleanupSystemTray();
-                if (scientificCalculator != null) {
-                    scientificCalculator.dispose();
-                }
+                handleAppExit();
             }
             @Override
             public void windowIconified(java.awt.event.WindowEvent e) {
@@ -447,6 +461,11 @@ public class AppFrame extends JFrame {
         JMenuItem goalMenuItem = new JMenuItem("Set Daily Goal");
         goalMenuItem.addActionListener(e -> promptSetDailyGoal());
         settingsMenu.add(goalMenuItem);
+
+        settingsMenu.addSeparator();
+        JMenuItem exitMenuItem = new JMenuItem("Exit");
+        exitMenuItem.addActionListener(e -> handleAppExit());
+        settingsMenu.add(exitMenuItem);
 
         menuBar.add(settingsMenu);
 
@@ -2500,6 +2519,7 @@ public class AppFrame extends JFrame {
             stopwatchRunning = true;
             stopwatchUiTimer.start();
             updateStopwatchButtons();
+            persistCurrentActiveSession();
         }
     }
 
@@ -2515,6 +2535,7 @@ public class AppFrame extends JFrame {
             stopwatchRunning = true;
             stopwatchUiTimer.start();
             updateStopwatchButtons();
+            persistCurrentActiveSession();
         }
     }
 
@@ -2529,6 +2550,7 @@ public class AppFrame extends JFrame {
         currentSessionPauseCount++;
         updateStopwatchDisplay();
         updateStopwatchButtons();
+        persistCurrentActiveSession();
     }
 
     public void stopAndLogStopwatch() {
@@ -2697,6 +2719,7 @@ public class AppFrame extends JFrame {
         stopwatchActivityTypeCombo.setSelectedIndex(0);
         stopwatchQuestionTypeCombo.setSelectedIndex(0);
         updateStopwatchButtons();
+        storageService.clearActiveSessionState();
     }
 
     private void updateStopwatchDisplay() {
@@ -2769,6 +2792,7 @@ public class AppFrame extends JFrame {
             timerRunning = true;
             timerTick.start();
             updateTimerButtons();
+            persistCurrentActiveSession();
         }
     }
 
@@ -2785,6 +2809,7 @@ public class AppFrame extends JFrame {
             currentSessionPauseCount++;
         }
         updateTimerButtons();
+        persistCurrentActiveSession();
     }
 
     public void stopTimer() {
@@ -2818,6 +2843,7 @@ public class AppFrame extends JFrame {
         timerBreakNotificationSent = false;
         timerTimeLabel.setText("00:00:00");
         updateTimerButtons();
+        storageService.clearActiveSessionState();
     }
 
     private void onTimerTick() {
@@ -4002,10 +4028,7 @@ public class AppFrame extends JFrame {
             popup.addSeparator();
             
             java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
-            exitItem.addActionListener(e -> {
-                cleanupSystemTray();
-                System.exit(0);
-            });
+            exitItem.addActionListener(e -> handleAppExit());
             popup.add(exitItem);
             
             trayIcon.setPopupMenu(popup);
@@ -4016,6 +4039,244 @@ public class AppFrame extends JFrame {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    public void spawnWindowsNotification(String title, String message, String type) {
+        try {
+            String appDir = System.getProperty("user.dir");
+            java.io.File exeFile = new java.io.File(appDir, "notifier.exe");
+            if (!exeFile.exists()) {
+                java.io.File jarFile = new java.io.File(AppFrame.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                java.io.File exeInJarDir = new java.io.File(jarFile.getParent(), "notifier.exe");
+                if (exeInJarDir.exists()) {
+                    exeFile = exeInJarDir;
+                }
+            }
+            if (exeFile.exists()) {
+                new ProcessBuilder(exeFile.getAbsolutePath(), title, message, type).start();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public synchronized void persistCurrentActiveSession() {
+        if (!stopwatchStarted && !timerStarted) {
+            return;
+        }
+
+        if (stopwatchStarted) {
+            long elapsed = stopwatchElapsedMillis;
+            if (stopwatchRunning) {
+                elapsed += (System.nanoTime() - stopwatchStartNano) / 1_000_000;
+            }
+            long elapsedSec = Math.max(1, elapsed / 1000);
+            String activityType = (String) stopwatchActivityTypeCombo.getSelectedItem();
+            String activityDetail = "";
+            if ("General".equals(activityType)) {
+                activityDetail = stopwatchActivityField.getText().trim();
+            } else if ("Questions".equals(activityType)) {
+                String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+                Object selectedObj = stopwatchQuestionDescCombo.getSelectedItem();
+                String qDesc = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : ((String) selectedObj).trim();
+                activityDetail = "Questions: " + (qType != null ? qType : "") + (qDesc.isEmpty() ? "" : ", " + qDesc);
+            } else if ("Lecture".equals(activityType)) {
+                String ch = stopwatchChapterField.getText().trim();
+                String lec = stopwatchLectureField.getText().trim();
+                activityDetail = "Lecture: Ch " + ch + ", Lec " + lec;
+            } else if ("Revision".equals(activityType)) {
+                String topic = stopwatchRevisionTopicField.getText().trim();
+                activityDetail = "Revision: " + topic;
+            }
+
+            ActiveSessionState state = new ActiveSessionState(
+                ActiveSessionState.SessionMode.STOPWATCH,
+                stopwatchSubject != null ? stopwatchSubject : (String) stopwatchSubjectCombo.getSelectedItem(),
+                stopwatchSessionStart != null ? stopwatchSessionStart : LocalDateTime.now(),
+                elapsedSec,
+                currentSessionPauseCount,
+                stopwatchRunning,
+                activityType,
+                activityDetail,
+                0,
+                0,
+                LocalDateTime.now()
+            );
+            storageService.saveActiveSessionState(state);
+        } else if (timerStarted) {
+            long elapsedSec = Math.max(1, timerTotalSeconds - timerRemainingSeconds);
+            String subject = (String) timerSubjectCombo.getSelectedItem();
+            if (subject == null || subject.isBlank()) {
+                subject = "General";
+            }
+            ActiveSessionState state = new ActiveSessionState(
+                ActiveSessionState.SessionMode.TIMER,
+                subject,
+                timerSessionStart != null ? timerSessionStart : LocalDateTime.now(),
+                elapsedSec,
+                currentSessionPauseCount,
+                timerRunning,
+                "General",
+                "",
+                timerTotalSeconds,
+                timerRemainingSeconds,
+                LocalDateTime.now()
+            );
+            storageService.saveActiveSessionState(state);
+        }
+    }
+
+    public void handleAppExit() {
+        if (stopwatchStarted || timerStarted) {
+            String subjectName = stopwatchStarted ? stopwatchSubject : (String) timerSubjectCombo.getSelectedItem();
+            if (subjectName == null || subjectName.isBlank()) subjectName = "General";
+            
+            long elapsedSec = 0;
+            if (stopwatchStarted) {
+                long elapsed = stopwatchElapsedMillis;
+                if (stopwatchRunning) {
+                    elapsed += (System.nanoTime() - stopwatchStartNano) / 1_000_000;
+                }
+                elapsedSec = elapsed / 1000;
+            } else {
+                elapsedSec = timerTotalSeconds - timerRemainingSeconds;
+            }
+            String durationStr = formatDuration(Math.max(0, elapsedSec));
+
+            String message = "A study session is currently in progress (" + subjectName + ", " + durationStr + ").\n"
+                    + "Do you really want to close TimeLogger?\n"
+                    + "(Your session will be safely preserved for recovery on next launch)";
+
+            int choice = JOptionPane.showConfirmDialog(
+                this,
+                message,
+                "Confirm Exit",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+            );
+
+            if (choice != JOptionPane.YES_OPTION) {
+                return;
+            }
+
+            isCleanExitInProgress = true;
+            persistCurrentActiveSession();
+            spawnWindowsNotification("TimeLogger", "TimeLogger closed. Your active study session was safely preserved.", "info");
+        } else {
+            isCleanExitInProgress = true;
+        }
+
+        saveChatHistory();
+        cleanupSystemTray();
+        if (scientificCalculator != null) {
+            scientificCalculator.dispose();
+        }
+        System.exit(0);
+    }
+
+    public void checkAndRecoverInterruptedSession() {
+        if (!storageService.hasActiveSessionState()) {
+            return;
+        }
+
+        ActiveSessionState state = storageService.loadActiveSessionState();
+        if (state == null) {
+            storageService.clearActiveSessionState();
+            return;
+        }
+
+        long elapsedSec = state.getElapsedSeconds();
+        String durationStr = formatDuration(elapsedSec);
+        String modeStr = state.getMode() == ActiveSessionState.SessionMode.STOPWATCH ? "Stopwatch" : "Timer";
+        String subject = state.getSubject();
+        String details = state.getActivityDetail();
+        if (details == null || details.isBlank()) details = state.getActivityType();
+        String startTimeStr = state.getSessionStart().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+        String msg = "<html><body style='width: 320px; font-family: sans-serif;'>"
+                + "<h3 style='color: #d9534f; margin-top: 0;'>Interrupted Study Session Detected</h3>"
+                + "<p>An active session was detected from a previous run or unexpected closure:</p>"
+                + "<table style='margin: 8px 0;'>"
+                + "<tr><td><b>Mode:</b></td><td>" + modeStr + "</td></tr>"
+                + "<tr><td><b>Subject:</b></td><td>" + subject + "</td></tr>"
+                + "<tr><td><b>Duration:</b></td><td>" + durationStr + "</td></tr>"
+                + "<tr><td><b>Activity:</b></td><td>" + details + "</td></tr>"
+                + "<tr><td><b>Started at:</b></td><td>" + startTimeStr + "</td></tr>"
+                + "</table>"
+                + "<p>What would you like to do?</p>"
+                + "</body></html>";
+
+        Object[] options = {"Resume Session", "Save & Log Now", "Discard"};
+        int choice = JOptionPane.showOptionDialog(
+            this,
+            msg,
+            "Study Session Recovery",
+            JOptionPane.YES_NO_CANCEL_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]
+        );
+
+        if (choice == 0) { // Resume Session
+            if (state.getMode() == ActiveSessionState.SessionMode.STOPWATCH) {
+                tabs.setSelectedIndex(tabs.indexOfTab("Stopwatch"));
+                stopwatchSubjectCombo.setSelectedItem(state.getSubject());
+                stopwatchSubject = state.getSubject();
+                stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
+                stopwatchSessionStart = state.getSessionStart();
+                stopwatchElapsedMillis = state.getElapsedSeconds() * 1000;
+                stopwatchStarted = true;
+                stopwatchRunning = false;
+                currentSessionPauseCount = state.getPauseCount();
+                stopwatchTimeLabel.setText(durationStr);
+
+                // Restore activity fields
+                if ("Questions".equals(state.getActivityType())) {
+                    stopwatchActivityTypeCombo.setSelectedItem("Questions");
+                } else if ("Lecture".equals(state.getActivityType())) {
+                    stopwatchActivityTypeCombo.setSelectedItem("Lecture");
+                } else if ("Revision".equals(state.getActivityType())) {
+                    stopwatchActivityTypeCombo.setSelectedItem("Revision");
+                } else {
+                    stopwatchActivityTypeCombo.setSelectedItem("General");
+                    stopwatchActivityField.setText(state.getActivityDetail());
+                }
+
+                updateStopwatchButtons();
+                stopwatchPauseResumeButton.setText("Resume");
+                persistCurrentActiveSession();
+            } else {
+                tabs.setSelectedIndex(tabs.indexOfTab("Timer"));
+                timerSubjectCombo.setSelectedItem(state.getSubject());
+                timerSessionStart = state.getSessionStart();
+                timerTotalSeconds = state.getTimerTotalSeconds();
+                timerRemainingSeconds = state.getTimerRemainingSeconds();
+                timerStarted = true;
+                timerRunning = false;
+                currentSessionPauseCount = state.getPauseCount();
+                timerTimeLabel.setText(formatDuration(Math.max(0, timerRemainingSeconds)));
+                updateTimerButtons();
+                timerPauseResumeButton.setText("Resume");
+                persistCurrentActiveSession();
+            }
+        } else if (choice == 1) { // Save & Log Now
+            SessionRecord record = new SessionRecord(
+                state.getMode() == ActiveSessionState.SessionMode.STOPWATCH ? SessionRecord.SessionType.STOPWATCH : SessionRecord.SessionType.TIMER,
+                state.getSubject(),
+                state.getSessionStart(),
+                LocalDateTime.now(),
+                state.getElapsedSeconds(),
+                state.getActivityDetail(),
+                state.getPauseCount()
+            );
+            storageService.appendSession(record);
+            storageService.clearActiveSessionState();
+            refreshSessionsTable();
+            refreshExportAvailability();
+            notifySessionLogged(state.getElapsedSeconds());
+            JOptionPane.showMessageDialog(this, "Interrupted session saved to logs.", "Session Recovered", JOptionPane.INFORMATION_MESSAGE);
+        } else { // Discard or closed
+            storageService.clearActiveSessionState();
         }
     }
 

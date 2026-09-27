@@ -17,11 +17,13 @@ public class StorageService {
     private final Path appDirectory;
     private final Path subjectsFile;
     private final Path sessionsFile;
+    private final Path activeSessionFile;
 
     public StorageService() {
         this.appDirectory = Paths.get(System.getProperty("user.dir"));
         this.subjectsFile = appDirectory.resolve("subjects.txt");
         this.sessionsFile = appDirectory.resolve("sessions.log");
+        this.activeSessionFile = appDirectory.resolve("active_session.state");
         initialize();
     }
 
@@ -569,5 +571,49 @@ public class StorageService {
         zos.putNextEntry(entry);
         Files.copy(file, zos);
         zos.closeEntry();
+    }
+
+    public synchronized void saveActiveSessionState(ActiveSessionState state) {
+        if (state == null) {
+            clearActiveSessionState();
+            return;
+        }
+        Path tempFile = appDirectory.resolve("active_session.state.tmp");
+        try {
+            java.util.Properties props = state.toProperties();
+            try (java.io.Writer writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
+                props.store(writer, "TimeLogger Active Session State");
+            }
+            try {
+                Files.move(tempFile, activeSessionFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tempFile, activeSessionFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception e) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (Exception ignored) {}
+        }
+    }
+
+    public synchronized ActiveSessionState loadActiveSessionState() {
+        if (!hasActiveSessionState()) return null;
+        java.util.Properties props = new java.util.Properties();
+        try (java.io.Reader reader = Files.newBufferedReader(activeSessionFile, StandardCharsets.UTF_8)) {
+            props.load(reader);
+            return ActiveSessionState.fromProperties(props);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public synchronized boolean hasActiveSessionState() {
+        return Files.exists(activeSessionFile);
+    }
+
+    public synchronized void clearActiveSessionState() {
+        try {
+            Files.deleteIfExists(activeSessionFile);
+        } catch (Exception ignored) {}
     }
 }

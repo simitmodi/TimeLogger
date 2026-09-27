@@ -116,6 +116,12 @@ if (Test-Path $csc) {
     if (Test-Path (Join-Path $root "mediacontrol.exe")) {
         Copy-Item -Path (Join-Path $root "mediacontrol.exe") -Destination (Join-Path $distDir "mediacontrol.exe") -Force
     }
+
+    Write-Host "Compiling C# WindowsNotifier..."
+    & $csc /target:winexe /out:(Join-Path $root "notifier.exe") /r:System.Windows.Forms.dll /r:System.Drawing.dll (Join-Path $root "src\main\java\com\timelogger\WindowsNotifier.cs") | Out-Null
+    if (Test-Path (Join-Path $root "notifier.exe")) {
+        Copy-Item -Path (Join-Path $root "notifier.exe") -Destination (Join-Path $distDir "notifier.exe") -Force
+    }
 }
 
 $appJarPath = Join-Path $root "dist\TimeLogger\app\time-logger.jar"
@@ -137,5 +143,13 @@ if (Test-Path (Split-Path -Parent $appJarPath)) {
         Copy-Item -Path (Join-Path $root "mediacontrol.exe") -Destination (Join-Path $appFolder "mediacontrol.exe") -Force
         $appRootFolder = Join-Path $root "dist\TimeLogger"
         Copy-Item -Path (Join-Path $root "mediacontrol.exe") -Destination (Join-Path $appRootFolder "mediacontrol.exe") -Force
+    }
+
+    # Copy notifier.exe to the native app folders
+    if (Test-Path (Join-Path $root "notifier.exe")) {
+        $appFolder = Join-Path $root "dist\TimeLogger\app"
+        Copy-Item -Path (Join-Path $root "notifier.exe") -Destination (Join-Path $appFolder "notifier.exe") -Force
+        $appRootFolder = Join-Path $root "dist\TimeLogger"
+        Copy-Item -Path (Join-Path $root "notifier.exe") -Destination (Join-Path $appRootFolder "notifier.exe") -Force
     }
 }

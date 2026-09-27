@@ -32,3 +32,10 @@ hs_err_pid*.log
 openrouter_api_key.txt
 .timelogger_openrouter_key
 
+# Active Session State
+active_session.state
+active_session.state.tmp
+
+# Root compiled helpers
+mediacontrol.exe
+notifier.exe
