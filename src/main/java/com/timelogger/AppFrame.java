@@ -4162,6 +4162,18 @@ public class AppFrame extends JFrame {
             persistCurrentActiveSession();
             spawnWindowsNotification("TimeLogger", "TimeLogger closed. Your active study session was safely preserved.", "info");
         } else {
+            int choice = JOptionPane.showConfirmDialog(
+                this,
+                "Do you really want to close TimeLogger?",
+                "Confirm Exit",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+            );
+
+            if (choice != JOptionPane.YES_OPTION) {
+                return;
+            }
+
             isCleanExitInProgress = true;
         }
 
