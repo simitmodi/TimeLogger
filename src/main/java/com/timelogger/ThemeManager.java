@@ -51,23 +51,23 @@ public class ThemeManager {
     }
 
     public static final ThemeColors LIGHT_COLORS = new ThemeColors(
-        new Color(248, 249, 250), // Soft gray-white
-        new Color(255, 255, 255), // Pure white
-        new Color(33, 37, 41),    // Dark slate gray
-        new Color(233, 236, 239), // Light slate button
-        new Color(33, 37, 41),
-        new Color(222, 226, 230), // Border
-        new Color(13, 110, 253)   // Accent royal blue
+        new Color(243, 243, 243), // Windows 11 Fluent mica background
+        new Color(255, 255, 255), // Pure crisp white card background
+        new Color(32, 31, 30),    // Fluent primary text
+        new Color(251, 251, 251), // Fluent button background
+        new Color(32, 31, 30),    // Button foreground
+        new Color(229, 229, 229), // Subtle 1px Fluent border
+        new Color(0, 103, 198)    // Windows 11 Fluent blue accent
     );
 
     public static final ThemeColors DARK_COLORS = new ThemeColors(
-        new Color(30, 30, 36),    // Deep charcoal
-        new Color(45, 45, 52),    // Sleek slate card
-        new Color(240, 240, 245), // Cool white text
-        new Color(58, 58, 66),    // Slate button
-        new Color(240, 240, 245),
-        new Color(68, 68, 76),    // Border
-        new Color(88, 166, 255)   // Accent neon blue
+        new Color(32, 32, 32),    // Windows 11 Fluent dark canvas
+        new Color(44, 44, 44),    // Fluent dark card surface
+        new Color(255, 255, 255), // Pure white text
+        new Color(50, 50, 50),    // Fluent dark button surface
+        new Color(255, 255, 255), // Button foreground
+        new Color(61, 61, 61),    // Subtle 1px dark border
+        new Color(96, 205, 255)   // Fluent neon sky blue accent
     );
 
     public static final ThemeColors HIGH_CONTRAST_COLORS = new ThemeColors(
@@ -166,8 +166,11 @@ public class ThemeManager {
         if (c instanceof JComponent) {
             JComponent jc = (JComponent) c;
 
-            // Handle titled borders
-            if (jc.getBorder() instanceof TitledBorder) {
+            // Handle titled borders and fluent card borders
+            if (jc.getBorder() instanceof FluentCardBorder) {
+                FluentCardBorder fcb = (FluentCardBorder) jc.getBorder();
+                fcb.setColors(colors.border, colors.text);
+            } else if (jc.getBorder() instanceof TitledBorder) {
                 TitledBorder tb = (TitledBorder) jc.getBorder();
                 tb.setTitleColor(colors.text);
                 tb.setBorder(BorderFactory.createLineBorder(colors.border, 1));
@@ -180,9 +183,11 @@ public class ThemeManager {
                 pcp.setTextColor(colors.text);
             } else if (jc instanceof ModernButton) {
                 ModernButton mb = (ModernButton) jc;
-                mb.setBackground(colors.buttonBg);
-                mb.setForeground(colors.buttonFg);
-                mb.setBorderColor(colors.border);
+                if (mb.getButtonStyle() == ModernButton.ButtonStyle.STANDARD) {
+                    mb.setBackground(colors.buttonBg);
+                    mb.setForeground(colors.buttonFg);
+                    mb.setBorderColor(colors.border);
+                }
             } else if (jc instanceof JButton) {
                 jc.setBackground(colors.buttonBg);
                 jc.setForeground(colors.buttonFg);
@@ -206,6 +211,9 @@ public class ThemeManager {
                         Component comp = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                         if (comp instanceof JComponent) {
                             JComponent jcomp = (JComponent) comp;
+                            if (value != null) {
+                                jcomp.setToolTipText(value.toString());
+                            }
                             if (isSelected) {
                                 jcomp.setBackground(colors.accent);
                                 jcomp.setForeground(colors.bg);
@@ -241,6 +249,21 @@ public class ThemeManager {
                 JTabbedPane tp = (JTabbedPane) jc;
                 tp.setBackground(colors.bg);
                 tp.setForeground(colors.text);
+                if (tp.getUI() instanceof FluentTabbedPaneUI) {
+                    AppTheme currentTheme = loadTheme();
+                    boolean isDark = (currentTheme == AppTheme.DARK || currentTheme == AppTheme.HIGH_CONTRAST);
+                    ((FluentTabbedPaneUI) tp.getUI()).updateColors(colors, isDark);
+                }
+            } else if (jc instanceof ChronographDialPanel) {
+                ChronographDialPanel cdp = (ChronographDialPanel) jc;
+                AppTheme currentTheme = loadTheme();
+                boolean isDark = (currentTheme == AppTheme.DARK || currentTheme == AppTheme.HIGH_CONTRAST);
+                cdp.updateThemeColors(colors, isDark);
+            } else if (jc instanceof ModernCardPanel) {
+                ModernCardPanel mcp = (ModernCardPanel) jc;
+                mcp.setCustomBg(colors.cardBg);
+                mcp.setCustomBorder(colors.border);
+                mcp.repaint();
             } else if (jc instanceof JProgressBar) {
                 JProgressBar pb = (JProgressBar) jc;
                 pb.setBackground(colors.cardBg);

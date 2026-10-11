@@ -38,6 +38,7 @@ import java.awt.TrayIcon;
 import java.awt.Image;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.BasicStroke;
 import java.awt.RenderingHints;
 import java.awt.GradientPaint;
 import java.awt.Color;
@@ -97,6 +98,12 @@ public class AppFrame extends JFrame {
 
     private final JLabel stopwatchTimeLabel = new JLabel("00:00:00", SwingConstants.CENTER);
     private final JLabel stopwatchSubjectLabel = new JLabel("Subject: -", SwingConstants.CENTER);
+    private final JLabel stopwatchDetailLabel = new JLabel(" ", SwingConstants.CENTER);
+    private final JLabel stopwatchStatsLabel = new JLabel("Today: 0m • Pauses: 0", SwingConstants.CENTER);
+    private final ChronographDialPanel chronographDialPanel = new ChronographDialPanel();
+    private final JPanel stopwatchCenterCard = new JPanel(new java.awt.CardLayout());
+    private final ModernButton stopwatchStyleToggleButton = new ModernButton("Analog", ModernButton.ButtonStyle.STANDARD);
+    private String stopwatchStyle = "DIGITAL";
     final JComboBox<String> stopwatchSubjectCombo = new JComboBox<>();
     final JComboBox<String> stopwatchActivityTypeCombo = new JComboBox<>(new String[]{"General", "Questions", "Lecture", "Revision"});
     final JPanel stopwatchActivitySubPanel = new JPanel(new java.awt.CardLayout()) {
@@ -116,13 +123,16 @@ public class AppFrame extends JFrame {
     });
     final JComboBox<String> stopwatchQuestionDescCombo = new JComboBox<>();
     private ModernButton stopwatchCalcBtn;
+    private final JPanel stopwatchCalcRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 4));
+    private final JPanel stopwatchBottomRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 0));
+    private ModernCardPanel stopwatchCard;
     final JTextField stopwatchChapterField = new JTextField(5);
     final JTextField stopwatchLectureField = new JTextField(5);
     final JTextField stopwatchRevisionTopicField = new JTextField(20);
-    private final ModernButton stopwatchStartButton = new ModernButton("Start");
-    private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause");
-    private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log");
-    private final ModernButton stopwatchResetButton = new ModernButton("Reset");
+    private final ModernButton stopwatchStartButton = new ModernButton("Start", ModernButton.ButtonStyle.PRIMARY);
+    private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.STANDARD);
+    private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log", ModernButton.ButtonStyle.SUCCESS);
+    private final ModernButton stopwatchResetButton = new ModernButton("Reset", ModernButton.ButtonStyle.OUTLINE);
 
     private boolean stopwatchRunning = false;
     private boolean stopwatchStarted = false;
@@ -133,14 +143,16 @@ public class AppFrame extends JFrame {
     private final Timer stopwatchUiTimer;
 
     private final JLabel timerTimeLabel = new JLabel("00:00:00", SwingConstants.CENTER);
+    private final JLabel timerSubjectLabel = new JLabel("Subject: -", SwingConstants.CENTER);
+    private final JLabel timerStatsLabel = new JLabel("Today: 0m • Pauses: 0", SwingConstants.CENTER);
     private final JSpinner hoursSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 99, 1));
     private final JSpinner minutesSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 59, 1));
     private final JSpinner secondsSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 59, 1));
     final JComboBox<String> timerSubjectCombo = new JComboBox<>();
-    private final ModernButton timerStartButton = new ModernButton("Start");
-    private final ModernButton timerPauseResumeButton = new ModernButton("Pause");
-    private final ModernButton timerStopButton = new ModernButton("Stop");
-    private final ModernButton timerResetButton = new ModernButton("Reset");
+    private final ModernButton timerStartButton = new ModernButton("Start", ModernButton.ButtonStyle.PRIMARY);
+    private final ModernButton timerPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.STANDARD);
+    private final ModernButton timerStopButton = new ModernButton("Stop", ModernButton.ButtonStyle.SUCCESS);
+    private final ModernButton timerResetButton = new ModernButton("Reset", ModernButton.ButtonStyle.OUTLINE);
 
     private boolean timerRunning = false;
     private boolean timerStarted = false;
@@ -310,6 +322,9 @@ public class AppFrame extends JFrame {
         updateStopwatchButtons();
         updateTimerButtons();
 
+        // Apply saved stopwatch display style (Digital or Analog Chronograph)
+        setStopwatchDisplayStyle(storageService.loadStopwatchDisplayStyle());
+
         // Apply saved theme on startup
         updateTheme(ThemeManager.loadTheme());
 
@@ -396,26 +411,87 @@ public class AppFrame extends JFrame {
     private void applyFontToContainer(java.awt.Container container, Font labelFont, Font controlFont) {
         for (java.awt.Component child : container.getComponents()) {
             if (child instanceof JLabel) {
-                if (child != stopwatchSubjectLabel && child != stopwatchTimeLabel && child != timerTimeLabel) {
+                if (child != stopwatchSubjectLabel && child != stopwatchTimeLabel && child != timerTimeLabel
+                    && child != stopwatchDetailLabel && child != stopwatchStatsLabel && child != timerSubjectLabel && child != timerStatsLabel) {
                     child.setFont(labelFont);
                 }
             } else if (child instanceof JComboBox || child instanceof JTextField || child instanceof JSpinner) {
                 child.setFont(controlFont);
                 int width = 150;
+                FontMetrics fm = child.getFontMetrics(controlFont);
+
                 if (child == stopwatchActivityField || child == stopwatchRevisionTopicField) {
-                    width = Math.max(150, getWidth() / 4);
-                } else if (child == stopwatchQuestionTypeCombo || child == stopwatchQuestionDescCombo) {
-                    width = Math.max(200, child.getPreferredSize().width + 40);
+                    // Contracts for small text and expands dynamically with content
+                    JTextField tf = (JTextField) child;
+                    String text = tf.getText();
+                    int textWidth = (text != null && !text.isEmpty()) ? fm.stringWidth(text) : 60;
+                    width = Math.max(100, textWidth + 36);
+                } else if (child == stopwatchQuestionTypeCombo) {
+                    JComboBox<?> cb = (JComboBox<?>) child;
+                    Object sel = cb.getSelectedItem();
+                    int selWidth = (sel != null) ? fm.stringWidth(sel.toString()) : 70;
+                    width = Math.max(100, selWidth + 48);
+                } else if (child == stopwatchQuestionDescCombo) {
+                    JComboBox<?> cb = (JComboBox<?>) child;
+                    Object sel = cb.getSelectedItem();
+                    int textWidth = (sel != null) ? fm.stringWidth(sel.toString()) : 60;
+                    width = Math.max(100, textWidth + 48);
                 } else if (child == stopwatchChapterField || child == stopwatchLectureField) {
-                    width = Math.max(40, getWidth() / 20);
-                } else if (child == stopwatchSubjectCombo || child == stopwatchActivityTypeCombo || child == timerSubjectCombo) {
-                    width = child.getPreferredSize().width + 40;
+                    JTextField tf = (JTextField) child;
+                    String text = tf.getText();
+                    int textWidth = (text != null && !text.isEmpty()) ? fm.stringWidth(text) : 20;
+                    width = Math.max(45, textWidth + 24);
+                } else if (child == stopwatchSubjectCombo || child == timerSubjectCombo) {
+                    // Contraction when selected subject is small, expansion when large (no clipping)
+                    JComboBox<?> cb = (JComboBox<?>) child;
+                    Object sel = cb.getSelectedItem();
+                    int selWidth = (sel != null) ? fm.stringWidth(sel.toString()) : 60;
+                    width = Math.max(90, selWidth + 48);
+                } else if (child == stopwatchActivityTypeCombo) {
+                    JComboBox<?> cb = (JComboBox<?>) child;
+                    Object sel = cb.getSelectedItem();
+                    int selWidth = (sel != null) ? fm.stringWidth(sel.toString()) : 60;
+                    width = Math.max(90, selWidth + 48);
                 }
                 
-                Dimension d = child.getPreferredSize();
-                child.setPreferredSize(new Dimension(width, d.height));
+                child.setPreferredSize(new Dimension(width, 28));
             } else if (child instanceof java.awt.Container) {
                 applyFontToContainer((java.awt.Container) child, labelFont, controlFont);
+            }
+        }
+
+        // Check if bottomRow is too wide for card, and move stopwatchCalcBtn down to calcRow if needed
+        adjustStopwatchCalculatorPosition();
+    }
+
+    private void adjustStopwatchCalculatorPosition() {
+        if (stopwatchCard == null || stopwatchCalcBtn == null || stopwatchActivitySubPanel == null) {
+            return;
+        }
+        // Calculate max available row space in the window before wrapping
+        int maxRowSpace = Math.max(380, getWidth() - 100);
+        int subPanelWidth = stopwatchActivitySubPanel.getPreferredSize().width;
+        int calcBtnWidth = stopwatchCalcBtn.getPreferredSize().width;
+
+        // If subpanel + calc button exceeds available space, move calc button down to its own row
+        boolean shouldMoveDown = (subPanelWidth + calcBtnWidth + 40) > maxRowSpace;
+
+        if (shouldMoveDown) {
+            if (stopwatchCalcBtn.getParent() != stopwatchCalcRow) {
+                stopwatchBottomRow.remove(stopwatchCalcBtn);
+                stopwatchCalcRow.removeAll();
+                stopwatchCalcRow.add(stopwatchCalcBtn);
+                stopwatchCalcRow.setVisible(true);
+                stopwatchCard.revalidate();
+                stopwatchCard.repaint();
+            }
+        } else {
+            if (stopwatchCalcBtn.getParent() != stopwatchBottomRow) {
+                stopwatchCalcRow.removeAll();
+                stopwatchCalcRow.setVisible(false);
+                stopwatchBottomRow.add(stopwatchCalcBtn);
+                stopwatchCard.revalidate();
+                stopwatchCard.repaint();
             }
         }
     }
@@ -424,12 +500,26 @@ public class AppFrame extends JFrame {
         int w = getWidth();
         int h = getHeight();
         int size = Math.max(64, Math.min(w / 10, h / 5));
-        Font f = new Font("Monospaced", Font.BOLD, size);
+        Font f = new Font("Segoe UI", Font.BOLD, size);
         stopwatchTimeLabel.setFont(f);
         timerTimeLabel.setFont(f);
 
-        int subjectLabelSize = Math.max(18, Math.min(w / 50, h / 30));
-        stopwatchSubjectLabel.setFont(new Font("SansSerif", Font.BOLD, subjectLabelSize));
+        int subjectLabelSize = Math.max(16, Math.min(w / 50, h / 30));
+        Font subjFont = new Font("Segoe UI", Font.BOLD, subjectLabelSize);
+        stopwatchSubjectLabel.setFont(subjFont);
+        timerSubjectLabel.setFont(subjFont);
+
+        int detailLabelSize = Math.max(12, Math.min(w / 65, h / 42));
+        Font detailFont = new Font("Segoe UI", Font.PLAIN, detailLabelSize);
+        stopwatchDetailLabel.setFont(detailFont);
+
+        int statsLabelSize = Math.max(11, Math.min(w / 70, h / 46));
+        Font statsFont = new Font("Segoe UI Semibold", Font.PLAIN, statsLabelSize);
+        stopwatchStatsLabel.setFont(statsFont);
+        timerStatsLabel.setFont(statsFont);
+
+        int dialSize = Math.max(310, Math.min(w / 3, h / 2));
+        chronographDialPanel.setPreferredSize(new Dimension(dialSize, dialSize));
 
         // Scale config font size
         int configSize = Math.max(12, Math.min(w / 70, h / 45));
@@ -493,6 +583,11 @@ public class AppFrame extends JFrame {
 
     private JTabbedPane createTabs() {
         this.tabs = new JTabbedPane();
+        FluentTabbedPaneUI fluentUi = new FluentTabbedPaneUI();
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+        ThemeManager.AppTheme theme = ThemeManager.loadTheme();
+        fluentUi.updateColors(colors, theme == ThemeManager.AppTheme.DARK || theme == ThemeManager.AppTheme.HIGH_CONTRAST);
+        this.tabs.setUI(fluentUi);
         tabs.addTab("Stopwatch", createStopwatchPanel());
         tabs.addTab("Timer", createTimerPanel());
         tabs.addTab("Logs", createLogsPanel());
@@ -501,106 +596,6 @@ public class AppFrame extends JFrame {
         tabs.addTab("Subjects", createSubjectsPanel());
         tabs.addTab("AI Assistant", createAiAssistantPanel());
         return tabs;
-    }
-
-    private JPanel createMediaControlsPanel() {
-        JPanel mediaPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
-        mediaPanel.setOpaque(false);
-
-        JButton prevBtn = createMediaButton("⏮", "Previous Track", 34, 13);
-        JButton playBtn = createMediaButton("⏯", "Play / Pause", 42, 17);
-        JButton nextBtn = createMediaButton("⏭", "Next Track", 34, 13);
-
-        prevBtn.addActionListener(e -> sendMediaKey("prev"));
-        playBtn.addActionListener(e -> sendMediaKey("play"));
-        nextBtn.addActionListener(e -> sendMediaKey("next"));
-
-        mediaPanel.add(prevBtn);
-        mediaPanel.add(playBtn);
-        mediaPanel.add(nextBtn);
-        return mediaPanel;
-    }
-
-    private void sendMediaKey(String action) {
-        try {
-            String appDir = System.getProperty("user.dir");
-            java.io.File exeFile = new java.io.File(appDir, "mediacontrol.exe");
-            if (exeFile.exists()) {
-                Runtime.getRuntime().exec(new String[]{exeFile.getAbsolutePath(), action});
-            } else {
-                java.io.File jarFile = new java.io.File(AppFrame.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-                java.io.File exeInJarDir = new java.io.File(jarFile.getParent(), "mediacontrol.exe");
-                if (exeInJarDir.exists()) {
-                    Runtime.getRuntime().exec(new String[]{exeInJarDir.getAbsolutePath(), action});
-                } else {
-                    Runtime.getRuntime().exec(new String[]{"mediacontrol.exe", action});
-                }
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-
-    private JButton createMediaButton(String symbol, String tooltip, int size, int fontSize) {
-        JButton btn = new JButton() {
-            private boolean isHovered = false;
-            {
-                addMouseListener(new java.awt.event.MouseAdapter() {
-                    @Override
-                    public void mouseEntered(MouseEvent e) { isHovered = true; repaint(); }
-                    @Override
-                    public void mouseExited(MouseEvent e) { isHovered = false; repaint(); }
-                });
-            }
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                
-                ThemeManager.AppTheme theme = ThemeManager.loadTheme();
-                boolean isDark = (theme == ThemeManager.AppTheme.DARK || theme == ThemeManager.AppTheme.HIGH_CONTRAST);
-                Color circleColor = isDark ? new Color(255, 255, 255, 12) : new Color(0, 0, 0, 8);
-                Color hoverColor = isDark ? new Color(255, 255, 255, 30) : new Color(0, 0, 0, 20);
-                Color pressedColor = isDark ? new Color(255, 255, 255, 45) : new Color(0, 0, 0, 35);
-                
-                if (getModel().isPressed()) {
-                    g2.setColor(pressedColor);
-                } else if (isHovered) {
-                    g2.setColor(hoverColor);
-                } else {
-                    g2.setColor(circleColor);
-                }
-                
-                g2.fillOval(1, 1, getWidth() - 2, getHeight() - 2);
-                
-                // Thin border
-                g2.setColor(isDark ? new Color(255, 255, 255, 35) : new Color(0, 0, 0, 25));
-                g2.drawOval(1, 1, getWidth() - 2, getHeight() - 2);
-                
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        btn.setToolTipText(tooltip);
-        btn.setFont(new Font("Segoe UI Symbol", Font.PLAIN, fontSize));
-        btn.setText(symbol);
-        btn.setHorizontalTextPosition(SwingConstants.CENTER);
-        btn.setVerticalTextPosition(SwingConstants.CENTER);
-        btn.setHorizontalAlignment(SwingConstants.CENTER);
-        btn.setVerticalAlignment(SwingConstants.CENTER);
-        
-        ThemeManager.AppTheme theme = ThemeManager.loadTheme();
-        boolean isDark = (theme == ThemeManager.AppTheme.DARK || theme == ThemeManager.AppTheme.HIGH_CONTRAST);
-        btn.setForeground(isDark ? Color.WHITE : new Color(60, 60, 60));
-        
-        btn.setFocusPainted(false);
-        btn.setContentAreaFilled(false);
-        btn.setBorderPainted(false);
-        btn.setOpaque(false);
-        btn.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-        btn.setPreferredSize(new Dimension(size, size));
-        btn.setMaximumSize(new Dimension(size, size));
-        return btn;
     }
 
     private JPanel createStopwatchPanel() {
@@ -617,26 +612,49 @@ public class AppFrame extends JFrame {
         stopwatchLectureField.setPreferredSize(new Dimension(50, 28));
         stopwatchRevisionTopicField.setPreferredSize(new Dimension(300, 28));
 
-        JPanel centerPanel = new JPanel(new GridBagLayout());
-        stopwatchConfigPanel = new JPanel(new GridBagLayout());
+        this.stopwatchCard = new ModernCardPanel(14);
+        ModernCardPanel card = this.stopwatchCard;
+        card.setLayout(new GridBagLayout());
+        card.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 20));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 8, 5, 8);
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.anchor = GridBagConstraints.CENTER;
+
+        // Row 1: Subject (Left) and Activity Type (Right)
+        JPanel topRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 0));
+        topRow.setOpaque(false);
+
+        JLabel subLabel = new JLabel("Subject:");
+        subLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        topRow.add(subLabel);
+        topRow.add(stopwatchSubjectCombo);
+
+        JLabel actLabel = new JLabel("Activity:");
+        actLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        topRow.add(actLabel);
+        topRow.add(stopwatchActivityTypeCombo);
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0.0;
+        card.add(topRow, gbc);
+
+        // Row 2: Contextual parameters + Calculator Button
+        stopwatchBottomRow.setOpaque(false);
+        stopwatchCalcRow.setOpaque(false);
+
+        stopwatchConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        stopwatchConfigPanel.setOpaque(false);
+        stopwatchConfigPanel.add(card);
         JPanel config = stopwatchConfigPanel;
-        GridBagConstraints gbcConfig = new GridBagConstraints();
-        gbcConfig.gridx = 0;
-        gbcConfig.gridy = 0;
-        gbcConfig.insets = new Insets(4, 12, 4, 12);
-        gbcConfig.fill = GridBagConstraints.NONE;
-        gbcConfig.anchor = GridBagConstraints.CENTER;
 
-        JPanel row0 = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
-        row0.setOpaque(false);
-        row0.add(new JLabel("Subject"));
-        row0.add(stopwatchSubjectCombo);
-        row0.add(new JLabel("Activity Type"));
-        row0.add(stopwatchActivityTypeCombo);
-        config.add(row0, gbcConfig);
-
-        JPanel generalCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        generalCard.add(new JLabel("Desc: "));
+        JPanel generalCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        generalCard.setOpaque(false);
+        JLabel descLabel = new JLabel("Description:");
+        descLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        generalCard.add(descLabel);
         generalCard.add(stopwatchActivityField);
 
         javax.swing.JPopupMenu autocompletePopup = new javax.swing.JPopupMenu();
@@ -683,32 +701,88 @@ public class AppFrame extends JFrame {
                 if (stopwatchActivityField.hasFocus()) {
                     javax.swing.SwingUtilities.invokeLater(this::updateAutocomplete);
                 }
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    AppFrame.this.updateTimeLabelsFontSize();
+                    AppFrame.this.updateStopwatchSessionDetails();
+                });
             }
             @Override
             public void removeUpdate(javax.swing.event.DocumentEvent e) {
                 if (stopwatchActivityField.hasFocus()) {
                     javax.swing.SwingUtilities.invokeLater(this::updateAutocomplete);
                 }
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    AppFrame.this.updateTimeLabelsFontSize();
+                    AppFrame.this.updateStopwatchSessionDetails();
+                });
             }
             @Override
-            public void changedUpdate(javax.swing.event.DocumentEvent e) {}
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    AppFrame.this.updateTimeLabelsFontSize();
+                    AppFrame.this.updateStopwatchSessionDetails();
+                });
+            }
         });
 
-        JPanel questionsCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        questionsCard.add(new JLabel("Type: "));
+        stopwatchRevisionTopicField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    AppFrame.this.updateTimeLabelsFontSize();
+                    AppFrame.this.updateStopwatchSessionDetails();
+                });
+            }
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    AppFrame.this.updateTimeLabelsFontSize();
+                    AppFrame.this.updateStopwatchSessionDetails();
+                });
+            }
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    AppFrame.this.updateTimeLabelsFontSize();
+                    AppFrame.this.updateStopwatchSessionDetails();
+                });
+            }
+        });
+
+        javax.swing.event.DocumentListener lecChListener = new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(AppFrame.this::updateStopwatchSessionDetails);
+            }
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(AppFrame.this::updateStopwatchSessionDetails);
+            }
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(AppFrame.this::updateStopwatchSessionDetails);
+            }
+        };
+        stopwatchChapterField.getDocument().addDocumentListener(lecChListener);
+        stopwatchLectureField.getDocument().addDocumentListener(lecChListener);
+
+        JPanel questionsCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        questionsCard.setOpaque(false);
+        JLabel qTypeLabel = new JLabel("Type:");
+        qTypeLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        questionsCard.add(qTypeLabel);
         questionsCard.add(stopwatchQuestionTypeCombo);
-        questionsCard.add(new JLabel(" Desc: "));
+        JLabel qDescLabel = new JLabel("Topic / Desc:");
+        qDescLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        questionsCard.add(qDescLabel);
         questionsCard.add(stopwatchQuestionDescCombo);
         
-        // Calculator button is created here but added to the config panel (row 2) below
-        stopwatchCalcBtn = new ModernButton("Calculator");
+        // Calculator button is placed neatly on the right of bottomRow
+        stopwatchCalcBtn = new ModernButton("Calculator", ModernButton.ButtonStyle.STANDARD);
         stopwatchCalcBtn.setIcon(new CalculatorIcon());
         stopwatchCalcBtn.setIconTextGap(6);
-        stopwatchCalcBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
-        stopwatchCalcBtn.setBackground(new Color(21, 101, 192));
-        stopwatchCalcBtn.setForeground(Color.WHITE);
-        stopwatchCalcBtn.setBorderColor(new Color(13, 71, 161));
-        stopwatchCalcBtn.setPreferredSize(new Dimension(130, 30));
+        stopwatchCalcBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        stopwatchCalcBtn.setPreferredSize(new Dimension(115, 28));
         stopwatchCalcBtn.addActionListener(e -> {
             if (scientificCalculator == null) {
                 scientificCalculator = new ScientificCalculator(this);
@@ -716,14 +790,22 @@ public class AppFrame extends JFrame {
             scientificCalculator.setVisible(true);
         });
 
-        JPanel lectureCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        lectureCard.add(new JLabel("Ch No: "));
+        JPanel lectureCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        lectureCard.setOpaque(false);
+        JLabel chLabel = new JLabel("Chapter:");
+        chLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lectureCard.add(chLabel);
         lectureCard.add(stopwatchChapterField);
-        lectureCard.add(new JLabel("Lec No: "));
+        JLabel lecLabel = new JLabel("Lecture:");
+        lecLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lectureCard.add(lecLabel);
         lectureCard.add(stopwatchLectureField);
 
-        JPanel revisionCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        revisionCard.add(new JLabel("Topic: "));
+        JPanel revisionCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        revisionCard.setOpaque(false);
+        JLabel revLabel = new JLabel("Topic:");
+        revLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        revisionCard.add(revLabel);
         revisionCard.add(stopwatchRevisionTopicField);
 
         stopwatchActivitySubPanel.add(generalCard, "General");
@@ -739,6 +821,8 @@ public class AppFrame extends JFrame {
             stopwatchActivitySubPanel.repaint();
             config.revalidate();
             config.repaint();
+            updateTimeLabelsFontSize();
+            updateStopwatchSessionDetails();
             // Calculator visibility is now manual; no auto-open/close on activity change
         });
 
@@ -773,6 +857,8 @@ public class AppFrame extends JFrame {
             } else {
                 lastSelectedDesc[0] = selected;
             }
+            updateTimeLabelsFontSize();
+            updateStopwatchSessionDetails();
         });
 
         stopwatchQuestionTypeCombo.addActionListener(e -> {
@@ -783,8 +869,9 @@ public class AppFrame extends JFrame {
                 if (subject == null) subject = "";
                 String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
                 selectOrAddQuestionDesc(lastDesc);
-                // Calculator visibility is now manual; no auto-open/close on question type change
             }
+            updateTimeLabelsFontSize();
+            updateStopwatchSessionDetails();
         });
 
         stopwatchSubjectCombo.addActionListener(e -> {
@@ -796,45 +883,66 @@ public class AppFrame extends JFrame {
                 String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
                 selectOrAddQuestionDesc(lastDesc);
             }
+            updateTimeLabelsFontSize();
+            updateStopwatchSessionDetails();
         });
 
-        GridBagConstraints gbcSub = new GridBagConstraints();
-        gbcSub.gridx = 0;
-        gbcSub.gridy = 1;
-        gbcSub.insets = new Insets(4, 12, 4, 12);
-        gbcSub.fill = GridBagConstraints.NONE;
-        gbcSub.anchor = GridBagConstraints.CENTER;
-        config.add(stopwatchActivitySubPanel, gbcSub);
+        stopwatchBottomRow.add(stopwatchActivitySubPanel);
+        stopwatchBottomRow.add(stopwatchCalcBtn);
 
-        // Calculator button row — always visible for all activity modes
-        GridBagConstraints gbcCalc = new GridBagConstraints();
-        gbcCalc.gridx = 0;
-        gbcCalc.gridy = 2;
-        gbcCalc.insets = new Insets(4, 12, 4, 12);
-        gbcCalc.fill = GridBagConstraints.NONE;
-        gbcCalc.anchor = GridBagConstraints.CENTER;
-        config.add(stopwatchCalcBtn, gbcCalc);
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0.0;
+        card.add(stopwatchBottomRow, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.weightx = 0.0;
+        card.add(stopwatchCalcRow, gbc);
+
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        ModernCardPanel heroCard = new ModernCardPanel(16);
+        heroCard.setLayout(new GridBagLayout());
+        heroCard.setBorder(BorderFactory.createEmptyBorder(16, 32, 16, 32));
+
+        GridBagConstraints gbcHero = new GridBagConstraints();
+        gbcHero.gridx = 0;
+        gbcHero.gridy = 0;
+        gbcHero.insets = new Insets(2, 0, 2, 0);
+        gbcHero.anchor = GridBagConstraints.CENTER;
+        heroCard.add(stopwatchSubjectLabel, gbcHero);
+
+        gbcHero.gridy = 1;
+        gbcHero.insets = new Insets(0, 0, 6, 0);
+        heroCard.add(stopwatchDetailLabel, gbcHero);
+
+        stopwatchCenterCard.setOpaque(false);
+        stopwatchCenterCard.add(stopwatchTimeLabel, "DIGITAL");
+        stopwatchCenterCard.add(chronographDialPanel, "ANALOG");
+
+        gbcHero.gridy = 2;
+        gbcHero.insets = new Insets(4, 0, 6, 0);
+        heroCard.add(stopwatchCenterCard, gbcHero);
+
+        gbcHero.gridy = 3;
+        gbcHero.insets = new Insets(2, 0, 2, 0);
+        heroCard.add(stopwatchStatsLabel, gbcHero);
 
         GridBagConstraints gbcCent = new GridBagConstraints();
         gbcCent.gridx = 0;
         gbcCent.gridy = 0;
-        gbcCent.insets = new Insets(5, 0, 5, 0);
         gbcCent.anchor = GridBagConstraints.CENTER;
-        centerPanel.add(stopwatchSubjectLabel, gbcCent);
-
-        gbcCent.gridy = 1;
-        gbcCent.insets = new Insets(10, 0, 10, 0);
-        centerPanel.add(createMediaControlsPanel(), gbcCent);
-
-        gbcCent.gridy = 2;
-        gbcCent.insets = new Insets(5, 0, 5, 0);
-        centerPanel.add(stopwatchTimeLabel, gbcCent);
+        centerPanel.add(heroCard, gbcCent);
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 10));
         stopwatchStartButton.addActionListener(e -> startStopwatch());
         stopwatchPauseResumeButton.addActionListener(e -> togglePauseStopwatch());
         stopwatchStopButton.addActionListener(e -> stopAndLogStopwatch());
         stopwatchResetButton.addActionListener(e -> resetStopwatch());
+        stopwatchStyleToggleButton.addActionListener(e -> {
+            boolean isCurrentlyAnalog = "ANALOG".equalsIgnoreCase(stopwatchStyle);
+            setStopwatchDisplayStyle(isCurrentlyAnalog ? "DIGITAL" : "ANALOG");
+        });
 
         stopwatchStartButton.setMnemonic('S');
         stopwatchPauseResumeButton.setMnemonic('P');
@@ -845,6 +953,7 @@ public class AppFrame extends JFrame {
         controls.add(stopwatchPauseResumeButton);
         controls.add(stopwatchStopButton);
         controls.add(stopwatchResetButton);
+        controls.add(stopwatchStyleToggleButton);
 
         panel.add(config, BorderLayout.NORTH);
         panel.add(centerPanel, BorderLayout.CENTER);
@@ -858,16 +967,35 @@ public class AppFrame extends JFrame {
 
         timerTimeLabel.setFont(new Font("Monospaced", Font.BOLD, 64));
 
-        timerConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        ModernCardPanel timerCard = new ModernCardPanel(14);
+        timerCard.setLayout(new FlowLayout(FlowLayout.CENTER, 14, 8));
+        timerCard.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+
+        JLabel tSubLabel = new JLabel("Subject:");
+        tSubLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        timerCard.add(tSubLabel);
+        timerSubjectCombo.addActionListener(e -> updateTimerSessionDetails());
+        timerCard.add(timerSubjectCombo);
+
+        JLabel hLbl = new JLabel("Hours:");
+        hLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        timerCard.add(hLbl);
+        timerCard.add(hoursSpinner);
+
+        JLabel mLbl = new JLabel("Minutes:");
+        mLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        timerCard.add(mLbl);
+        timerCard.add(minutesSpinner);
+
+        JLabel sLbl = new JLabel("Seconds:");
+        sLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        timerCard.add(sLbl);
+        timerCard.add(secondsSpinner);
+
+        timerConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        timerConfigPanel.setOpaque(false);
+        timerConfigPanel.add(timerCard);
         JPanel config = timerConfigPanel;
-        config.add(new JLabel("Hours"));
-        config.add(hoursSpinner);
-        config.add(new JLabel("Minutes"));
-        config.add(minutesSpinner);
-        config.add(new JLabel("Seconds"));
-        config.add(secondsSpinner);
-        config.add(new JLabel("Subject"));
-        config.add(timerSubjectCombo);
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 10));
         timerStartButton.addActionListener(e -> startTimer());
@@ -888,16 +1016,30 @@ public class AppFrame extends JFrame {
         panel.add(config, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel(new GridBagLayout());
+        ModernCardPanel timerHeroCard = new ModernCardPanel(16);
+        timerHeroCard.setLayout(new GridBagLayout());
+        timerHeroCard.setBorder(BorderFactory.createEmptyBorder(20, 40, 20, 40));
+
+        GridBagConstraints gbcHero = new GridBagConstraints();
+        gbcHero.gridx = 0;
+        gbcHero.gridy = 0;
+        gbcHero.insets = new Insets(4, 0, 4, 0);
+        gbcHero.anchor = GridBagConstraints.CENTER;
+        timerHeroCard.add(timerSubjectLabel, gbcHero);
+
+        gbcHero.gridy = 1;
+        gbcHero.insets = new Insets(4, 0, 6, 0);
+        timerHeroCard.add(timerTimeLabel, gbcHero);
+
+        gbcHero.gridy = 2;
+        gbcHero.insets = new Insets(4, 0, 4, 0);
+        timerHeroCard.add(timerStatsLabel, gbcHero);
+
         GridBagConstraints gbcCent = new GridBagConstraints();
         gbcCent.gridx = 0;
         gbcCent.gridy = 0;
-        gbcCent.insets = new Insets(10, 0, 10, 0);
         gbcCent.anchor = GridBagConstraints.CENTER;
-        centerPanel.add(createMediaControlsPanel(), gbcCent);
-
-        gbcCent.gridy = 1;
-        gbcCent.insets = new Insets(5, 0, 5, 0);
-        centerPanel.add(timerTimeLabel, gbcCent);
+        centerPanel.add(timerHeroCard, gbcCent);
 
         panel.add(centerPanel, BorderLayout.CENTER);
         panel.add(controls, BorderLayout.SOUTH);
@@ -1138,13 +1280,13 @@ public class AppFrame extends JFrame {
                     
                     // Setup stopwatch state for resumption but don't start running yet
                     stopwatchSubject = subject;
-                    stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
                     stopwatchSessionStart = selectedSession.getStartTime();
                     stopwatchElapsedMillis = selectedSession.getDurationSeconds() * 1000;
                     stopwatchStarted = true;
                     stopwatchRunning = false;
                     updateStopwatchDisplay();
                     updateStopwatchButtons();
+                    updateStopwatchSessionDetails();
                     
                     // Switch to Stopwatch tab
                     tabs.setSelectedIndex(0);
@@ -1169,6 +1311,7 @@ public class AppFrame extends JFrame {
                     timerRunning = false;
                     timerTimeLabel.setText(formatDuration(totalSeconds));
                     updateTimerButtons();
+                    updateTimerSessionDetails();
                     
                     // Switch to Timer tab
                     tabs.setSelectedIndex(1);
@@ -2477,6 +2620,74 @@ public class AppFrame extends JFrame {
         });
     }
 
+    private String getTodaySubjectStats(String subject) {
+        if (subject == null || subject.trim().isEmpty() || "-".equals(subject.trim())) {
+            return "Today: 0m • Pauses: " + currentSessionPauseCount;
+        }
+        LocalDate today = LocalDate.now();
+        List<SessionRecord> all = storageService.loadSessions();
+        long totalSecToday = 0;
+        for (SessionRecord s : all) {
+            if (s.getStartTime() != null && s.getStartTime().toLocalDate().equals(today)) {
+                if (subject.equalsIgnoreCase(s.getSubject())) {
+                    totalSecToday += s.getDurationSeconds();
+                }
+            }
+        }
+        long minutes = totalSecToday / 60;
+        String timeStr = minutes >= 60 ? String.format("%dh %02dm", minutes / 60, minutes % 60) : (minutes + "m");
+        return "Today: " + timeStr + " • Pauses: " + currentSessionPauseCount;
+    }
+
+    private void updateStopwatchSessionDetails() {
+        String selSub = stopwatchStarted ? stopwatchSubject : (String) stopwatchSubjectCombo.getSelectedItem();
+        stopwatchSubjectLabel.setText(selSub != null && !selSub.isEmpty() ? selSub : "-");
+
+        String activityType = (String) stopwatchActivityTypeCombo.getSelectedItem();
+        if (activityType == null) {
+            activityType = "General";
+        }
+
+        String detail = "";
+        if ("Questions".equals(activityType)) {
+            String qType = (String) stopwatchQuestionTypeCombo.getSelectedItem();
+            Object selectedObj = stopwatchQuestionDescCombo.getSelectedItem();
+            String qDesc = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : selectedObj.toString().trim();
+            detail = "Activity: Questions (" + (qType != null ? qType : "Questions");
+            if (!qDesc.isEmpty()) {
+                detail += " • " + qDesc;
+            }
+            detail += ")";
+        } else if ("Lecture".equals(activityType)) {
+            String ch = stopwatchChapterField.getText().trim();
+            String lec = stopwatchLectureField.getText().trim();
+            detail = "Activity: Lecture";
+            if (!ch.isEmpty()) detail += " • Ch " + ch;
+            if (!lec.isEmpty()) detail += " • Lec " + lec;
+        } else if ("Revision".equals(activityType)) {
+            String topic = stopwatchRevisionTopicField.getText().trim();
+            detail = "Activity: Revision";
+            if (!topic.isEmpty()) {
+                detail += " • " + topic;
+            }
+        } else {
+            String desc = stopwatchActivityField.getText().trim();
+            detail = "Activity: General";
+            if (!desc.isEmpty()) {
+                detail += " • " + desc;
+            }
+        }
+
+        stopwatchDetailLabel.setText(detail);
+        stopwatchStatsLabel.setText(getTodaySubjectStats(selSub));
+    }
+
+    private void updateTimerSessionDetails() {
+        String selSub = (String) timerSubjectCombo.getSelectedItem();
+        timerSubjectLabel.setText(selSub != null && !selSub.isEmpty() ? selSub : "-");
+        timerStatsLabel.setText(getTodaySubjectStats(selSub));
+    }
+
     public void startStopwatch() {
         if (subjects.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Add at least one subject in the Subjects tab first.", "No Subjects", JOptionPane.WARNING_MESSAGE);
@@ -2495,7 +2706,6 @@ public class AppFrame extends JFrame {
             }
 
             stopwatchSubject = selectedSubject;
-            stopwatchSubjectLabel.setText("Subject: " + stopwatchSubject);
             if (resumedSession != null) {
                 if (resumedSession.getType() == SessionRecord.SessionType.STOPWATCH) {
                     stopwatchSessionStart = resumedSession.getStartTime();
@@ -2512,13 +2722,16 @@ public class AppFrame extends JFrame {
             stopwatchStarted = true;
             stopwatchBreakNotificationSent = false;
             currentSessionPauseCount = 0;
+            updateStopwatchSessionDetails();
         }
 
         if (!stopwatchRunning) {
             stopwatchStartNano = System.nanoTime();
             stopwatchRunning = true;
+            stopwatchUiTimer.setDelay("ANALOG".equalsIgnoreCase(stopwatchStyle) ? 30 : 100);
             stopwatchUiTimer.start();
             updateStopwatchButtons();
+            updateStopwatchSessionDetails();
             persistCurrentActiveSession();
         }
     }
@@ -2533,8 +2746,10 @@ public class AppFrame extends JFrame {
         } else {
             stopwatchStartNano = System.nanoTime();
             stopwatchRunning = true;
+            stopwatchUiTimer.setDelay("ANALOG".equalsIgnoreCase(stopwatchStyle) ? 30 : 100);
             stopwatchUiTimer.start();
             updateStopwatchButtons();
+            updateStopwatchSessionDetails();
             persistCurrentActiveSession();
         }
     }
@@ -2550,6 +2765,7 @@ public class AppFrame extends JFrame {
         currentSessionPauseCount++;
         updateStopwatchDisplay();
         updateStopwatchButtons();
+        updateStopwatchSessionDetails();
         persistCurrentActiveSession();
     }
 
@@ -2709,8 +2925,8 @@ public class AppFrame extends JFrame {
         resumedSession = null;
         stopwatchBreakNotificationSent = false;
         stopwatchUiTimer.stop();
-        stopwatchSubjectLabel.setText("Subject: -");
         stopwatchTimeLabel.setText("00:00:00");
+        chronographDialPanel.setElapsedMillis(0);
         stopwatchActivityField.setText("");
         stopwatchChapterField.setText("");
         stopwatchLectureField.setText("");
@@ -2719,7 +2935,37 @@ public class AppFrame extends JFrame {
         stopwatchActivityTypeCombo.setSelectedIndex(0);
         stopwatchQuestionTypeCombo.setSelectedIndex(0);
         updateStopwatchButtons();
+        updateStopwatchSessionDetails();
         storageService.clearActiveSessionState();
+    }
+
+    public void setStopwatchDisplayStyle(String style) {
+        if (style == null || (!"ANALOG".equalsIgnoreCase(style) && !"DIGITAL".equalsIgnoreCase(style))) {
+            style = "DIGITAL";
+        }
+        this.stopwatchStyle = style.toUpperCase();
+        storageService.saveStopwatchDisplayStyle(this.stopwatchStyle);
+
+        boolean isAnalog = "ANALOG".equalsIgnoreCase(this.stopwatchStyle);
+        if (stopwatchStyleToggleButton != null) {
+            stopwatchStyleToggleButton.setText(isAnalog ? "Digital View" : "Analog View");
+            stopwatchStyleToggleButton.setToolTipText(isAnalog ? "Switch to digital digital clock readout" : "Switch to mechanical chronograph dial");
+        }
+
+        if (stopwatchCenterCard != null && stopwatchCenterCard.getLayout() instanceof java.awt.CardLayout) {
+            java.awt.CardLayout cl = (java.awt.CardLayout) stopwatchCenterCard.getLayout();
+            cl.show(stopwatchCenterCard, this.stopwatchStyle);
+            stopwatchCenterCard.revalidate();
+            stopwatchCenterCard.repaint();
+        }
+
+        if (isAnalog && stopwatchRunning) {
+            stopwatchUiTimer.setDelay(30);
+        } else {
+            stopwatchUiTimer.setDelay(100);
+        }
+
+        updateStopwatchDisplay();
     }
 
     private void updateStopwatchDisplay() {
@@ -2742,6 +2988,7 @@ public class AppFrame extends JFrame {
 
         String formatted = formatDuration(totalSeconds);
         stopwatchTimeLabel.setText(formatted);
+        chronographDialPanel.setElapsedMillis(elapsed);
     }
 
     private void updateStopwatchButtons() {
@@ -2786,12 +3033,14 @@ public class AppFrame extends JFrame {
             timerStarted = true;
             timerBreakNotificationSent = false;
             currentSessionPauseCount = 0;
+            updateTimerSessionDetails();
         }
 
         if (!timerRunning) {
             timerRunning = true;
             timerTick.start();
             updateTimerButtons();
+            updateTimerSessionDetails();
             persistCurrentActiveSession();
         }
     }
@@ -2809,6 +3058,7 @@ public class AppFrame extends JFrame {
             currentSessionPauseCount++;
         }
         updateTimerButtons();
+        updateTimerSessionDetails();
         persistCurrentActiveSession();
     }
 
@@ -2843,6 +3093,7 @@ public class AppFrame extends JFrame {
         timerBreakNotificationSent = false;
         timerTimeLabel.setText("00:00:00");
         updateTimerButtons();
+        updateTimerSessionDetails();
         storageService.clearActiveSessionState();
     }
 
@@ -3153,6 +3404,8 @@ public class AppFrame extends JFrame {
         } else if (!subjects.isEmpty()) {
             stopwatchSubjectCombo.setSelectedIndex(0);
         }
+        updateTimeLabelsFontSize();
+        updateStopwatchSessionDetails();
     }
 
     private void refreshTimerSubjects() {
@@ -3169,6 +3422,8 @@ public class AppFrame extends JFrame {
         } else if (!subjects.isEmpty()) {
             timerSubjectCombo.setSelectedIndex(0);
         }
+        updateTimeLabelsFontSize();
+        updateTimerSessionDetails();
     }
 
     private void refreshLogsSubjects() {
@@ -4256,6 +4511,7 @@ public class AppFrame extends JFrame {
 
                 updateStopwatchButtons();
                 stopwatchPauseResumeButton.setText("Resume");
+                updateStopwatchSessionDetails();
                 persistCurrentActiveSession();
             } else {
                 tabs.setSelectedIndex(tabs.indexOfTab("Timer"));
@@ -4269,6 +4525,7 @@ public class AppFrame extends JFrame {
                 timerTimeLabel.setText(formatDuration(Math.max(0, timerRemainingSeconds)));
                 updateTimerButtons();
                 timerPauseResumeButton.setText("Resume");
+                updateTimerSessionDetails();
                 persistCurrentActiveSession();
             }
         } else if (choice == 1) { // Save & Log Now
@@ -6220,6 +6477,100 @@ public class AppFrame extends JFrame {
         public int getIconWidth() { return 13; }
         @Override
         public int getIconHeight() { return 15; }
+    }
+
+    /**
+     * Sleek iOS/Fluent-style segmented pill switcher for Digital vs Analog stopwatch.
+     */
+    private static class SegmentedStyleSwitch extends JPanel {
+        private boolean isAnalog = false;
+        private java.util.function.Consumer<Boolean> onToggle;
+
+        public SegmentedStyleSwitch(java.util.function.Consumer<Boolean> onToggle) {
+            this.onToggle = onToggle;
+            setOpaque(false);
+            setPreferredSize(new Dimension(200, 32));
+            setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+            addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    int w = getWidth();
+                    boolean clickedAnalog = (e.getX() >= w / 2);
+                    if (clickedAnalog != isAnalog) {
+                        isAnalog = clickedAnalog;
+                        repaint();
+                        if (SegmentedStyleSwitch.this.onToggle != null) {
+                            SegmentedStyleSwitch.this.onToggle.accept(isAnalog);
+                        }
+                    }
+                }
+            });
+        }
+
+        public void setAnalog(boolean analog) {
+            if (this.isAnalog != analog) {
+                this.isAnalog = analog;
+                repaint();
+            }
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            int w = getWidth();
+            int h = getHeight();
+            int r = h;
+
+            ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+            boolean isDark = (ThemeManager.loadTheme() == ThemeManager.AppTheme.DARK 
+                           || ThemeManager.loadTheme() == ThemeManager.AppTheme.HIGH_CONTRAST);
+
+            // Capsule background
+            Color trackBg = isDark ? new Color(45, 48, 54) : new Color(236, 238, 242);
+            g2.setColor(trackBg);
+            g2.fillRoundRect(0, 0, w, h, r, r);
+
+            // Subtle border
+            g2.setColor(isDark ? new Color(65, 70, 78) : new Color(218, 222, 228));
+            g2.setStroke(new BasicStroke(1.0f));
+            g2.drawRoundRect(0, 0, w - 1, h - 1, r, r);
+
+            // Active pill thumb
+            int thumbW = (w - 6) / 2;
+            int thumbH = h - 6;
+            int thumbX = isAnalog ? (w / 2) : 3;
+            int thumbY = 3;
+
+            Color thumbBg = colors.accent;
+            g2.setColor(thumbBg);
+            g2.fillRoundRect(thumbX, thumbY, thumbW, thumbH, thumbH, thumbH);
+
+            // Labels
+            Font f = new Font("Segoe UI", Font.BOLD, 12);
+            g2.setFont(f);
+            FontMetrics fm = g2.getFontMetrics();
+
+            String leftText = "Digital";
+            String rightText = "Analog";
+
+            int leftTw = fm.stringWidth(leftText);
+            int rightTw = fm.stringWidth(rightText);
+            int textY = (h + fm.getAscent() - fm.getDescent()) / 2;
+
+            // Left text color
+            g2.setColor(!isAnalog ? Color.WHITE : (isDark ? new Color(180, 185, 195) : new Color(100, 105, 115)));
+            g2.drawString(leftText, (w / 4) - (leftTw / 2), textY);
+
+            // Right text color
+            g2.setColor(isAnalog ? Color.WHITE : (isDark ? new Color(180, 185, 195) : new Color(100, 105, 115)));
+            g2.drawString(rightText, (3 * w / 4) - (rightTw / 2), textY);
+
+            g2.dispose();
+        }
     }
 }
 

@@ -616,4 +616,68 @@ public class StorageService {
             Files.deleteIfExists(activeSessionFile);
         } catch (Exception ignored) {}
     }
+
+    public String loadPreferredLaunchMode() {
+        Path file = appDirectory.resolve("launch_mode.txt");
+        try {
+            if (Files.exists(file)) {
+                return Files.readString(file, StandardCharsets.UTF_8).trim();
+            }
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    public void savePreferredLaunchMode(String mode) {
+        Path file = appDirectory.resolve("launch_mode.txt");
+        try {
+            if (mode == null || mode.isEmpty()) {
+                Files.deleteIfExists(file);
+            } else {
+                Files.writeString(file, mode, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public String loadStopwatchDisplayStyle() {
+        Path file = appDirectory.resolve("stopwatch_style.txt");
+        try {
+            if (Files.exists(file)) {
+                String val = Files.readString(file, StandardCharsets.UTF_8).trim();
+                if ("ANALOG".equalsIgnoreCase(val) || "DIGITAL".equalsIgnoreCase(val)) {
+                    return val.toUpperCase();
+                }
+            }
+        } catch (Exception ignored) {}
+        return "DIGITAL";
+    }
+
+    public void saveStopwatchDisplayStyle(String style) {
+        Path file = appDirectory.resolve("stopwatch_style.txt");
+        try {
+            Files.writeString(file, style, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception ignored) {}
+    }
+
+    public List<String> getSubjectsSortedByUsage() {
+        List<String> allSubjects = loadSubjects();
+        List<SessionRecord> sessions = loadSessions();
+        java.util.Map<String, Long> subjectUsage = new java.util.HashMap<>();
+        for (SessionRecord session : sessions) {
+            String sub = session.getSubject();
+            subjectUsage.put(sub, subjectUsage.getOrDefault(sub, 0L) + session.getDurationSeconds());
+        }
+
+        List<String> sorted = new ArrayList<>(allSubjects);
+        sorted.sort((a, b) -> {
+            long usageA = subjectUsage.getOrDefault(a, 0L);
+            long usageB = subjectUsage.getOrDefault(b, 0L);
+            if (usageA != usageB) {
+                return Long.compare(usageB, usageA); // Most used first
+            }
+            return a.compareToIgnoreCase(b);
+        });
+        return sorted;
+    }
 }

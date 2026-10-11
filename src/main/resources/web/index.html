@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time Logger</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-light">
+  <!-- Top Bar / Header -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-icon">⏱</div>
+      <div class="brand-title">Time Logger <span class="badge-web">Web Edition</span></div>
+    </div>
+    <div class="topbar-controls">
+      <!-- Goal Widget -->
+      <div class="goal-widget" id="goalWidget" title="Click to change daily goal">
+        <span id="goalText">Today: 0 / 120 min (0%)</span>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="goalProgressFill" style="width: 0%;"></div>
+        </div>
+      </div>
+      <button class="topbar-btn" id="btnSetGoal" title="Set Daily Study Goal">🎯 Set Goal</button>
+      <button class="topbar-btn" id="btnCalculator" title="Scientific Calculator">🖩 Calculator</button>
+      <button class="topbar-btn" id="btnShortcuts" title="Keyboard Shortcuts (F1)">⌨️ Shortcuts</button>
+      <div class="theme-dropdown">
+        <select id="themeSelect" class="styled-select">
+          <option value="LIGHT">☀️ Light</option>
+          <option value="DARK">🌙 Dark</option>
+          <option value="HIGH_CONTRAST">⚡ High Contrast</option>
+        </select>
+      </div>
+      <button class="topbar-btn secondary" id="btnSwitchDesktop" title="Switch to Desktop Window">🖥️ Desktop App</button>
+      <button class="topbar-btn danger" id="btnExitApp" title="Exit TimeLogger">✕ Exit</button>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="nav-tabs">
+    <button class="tab-btn active" data-tab="stopwatch">Stopwatch</button>
+    <button class="tab-btn" data-tab="timer">Timer</button>
+    <button class="tab-btn" data-tab="logs">Logs</button>
+    <button class="tab-btn" data-tab="analysis">Analysis</button>
+    <button class="tab-btn" data-tab="insights">Insights</button>
+    <button class="tab-btn" data-tab="subjects">Subjects</button>
+    <button class="tab-btn" data-tab="ai">AI Assistant</button>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="main-content">
+    
+    <!-- 1. STOPWATCH TAB -->
+    <section id="tab-stopwatch" class="tab-pane active">
+      <div class="timer-container card">
+        <div class="session-subject-display" id="stopwatchSubjectDisplay">Subject: -</div>
+        <div class="digital-clock" id="stopwatchClock">00:00:00</div>
+        
+        <!-- Stopwatch Configuration -->
+        <div class="config-grid">
+          <div class="form-group">
+            <label>Subject</label>
+            <select id="swSubject" class="styled-select"></select>
+          </div>
+          <div class="form-group">
+            <label>Activity Type</label>
+            <select id="swActivityType" class="styled-select">
+              <option value="General">General</option>
+              <option value="Questions">Questions</option>
+              <option value="Lecture">Lecture</option>
+              <option value="Revision">Revision</option>
+            </select>
+          </div>
+
+          <!-- Dynamic Activity Detail Sub-Panels -->
+          <div class="form-group" id="swGeneralGroup">
+            <label>Activity Detail</label>
+            <input type="text" id="swActivityDetail" placeholder="What are you working on?" class="styled-input" list="swDetailSuggestions">
+            <datalist id="swDetailSuggestions"></datalist>
+          </div>
+
+          <div class="form-group-row hidden" id="swQuestionsGroup">
+            <div class="form-group">
+              <label>Question Type</label>
+              <select id="swQuestionType" class="styled-select">
+                <option value="DPP Questions">DPP Questions</option>
+                <option value="Practice Book Questions">Practice Book Questions</option>
+                <option value="Previous Year Questions">Previous Year Questions</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Topic / Source</label>
+              <select id="swQuestionTopic" class="styled-select"></select>
+            </div>
+          </div>
+
+          <div class="form-group-row hidden" id="swLectureGroup">
+            <div class="form-group">
+              <label>Chapter #</label>
+              <input type="text" id="swLectureChapter" placeholder="1" class="styled-input small-input">
+            </div>
+            <div class="form-group">
+              <label>Lecture #</label>
+              <input type="text" id="swLectureNum" placeholder="1" class="styled-input small-input">
+            </div>
+          </div>
+
+          <div class="form-group hidden" id="swRevisionGroup">
+            <label>Revision Topic</label>
+            <input type="text" id="swRevisionTopic" placeholder="Topic name..." class="styled-input">
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="action-buttons">
+          <button id="btnSwStart" class="btn btn-primary">Start</button>
+          <button id="btnSwPause" class="btn btn-warning" disabled>Pause</button>
+          <button id="btnSwStop" class="btn btn-success" disabled>Stop &amp; Log</button>
+          <button id="btnSwReset" class="btn btn-secondary" disabled>Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. TIMER TAB -->
+    <section id="tab-timer" class="tab-pane">
+      <div class="timer-container card">
+        <div class="session-subject-display" id="timerSubjectDisplay">Subject: General</div>
+        <div class="digital-clock" id="timerClock">00:00:00</div>
+
+        <div class="config-grid">
+          <div class="form-group">
+            <label>Subject</label>
+            <select id="timerSubject" class="styled-select"></select>
+          </div>
+          <div class="form-group-row timer-spinners" id="timerInputsGroup">
+            <div class="spinner-box">
+              <label>Hours</label>
+              <input type="number" id="timerHours" min="0" max="99" value="0" class="styled-input spinner-input">
+            </div>
+            <div class="spinner-box">
+              <label>Minutes</label>
+              <input type="number" id="timerMinutes" min="0" max="59" value="30" class="styled-input spinner-input">
+            </div>
+            <div class="spinner-box">
+              <label>Seconds</label>
+              <input type="number" id="timerSeconds" min="0" max="59" value="0" class="styled-input spinner-input">
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button id="btnTimerStart" class="btn btn-primary">Start</button>
+          <button id="btnTimerPause" class="btn btn-warning" disabled>Pause</button>
+          <button id="btnTimerStop" class="btn btn-success" disabled>Stop</button>
+          <button id="btnTimerReset" class="btn btn-secondary" disabled>Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. LOGS TAB -->
+    <section id="tab-logs" class="tab-pane">
+      <div class="card">
+        <div class="logs-header">
+          <div class="filters-row">
+            <input type="text" id="logsSearch" placeholder="🔍 Search logs..." class="styled-input search-input">
+            <select id="logsSubjectFilter" class="styled-select"><option value="All">All Subjects</option></select>
+            <select id="logsModeFilter" class="styled-select">
+              <option value="All">All Modes</option>
+              <option value="STOPWATCH">Stopwatch</option>
+              <option value="TIMER">Timer</option>
+            </select>
+            <select id="logsDateFilter" class="styled-select">
+              <option value="All">All Dates</option>
+              <option value="Today">Today</option>
+              <option value="Yesterday">Yesterday</option>
+              <option value="Week">This Week</option>
+              <option value="Month">This Month</option>
+            </select>
+          </div>
+          <div class="export-actions">
+            <button class="btn btn-primary btn-sm" id="btnResumeSelectedLog" title="Resume selected session">▶️ Resume Session</button>
+            <button class="btn btn-secondary btn-sm" id="btnEditSelectedLog" title="Edit selected session">✏️ Edit Log</button>
+            <button class="btn btn-secondary btn-sm" id="btnExportWeekly">📥 Export Weekly XLSX</button>
+            <button class="btn btn-secondary btn-sm" id="btnExportMonthly">📥 Export Monthly XLSX</button>
+            <button class="btn btn-secondary btn-sm" id="btnExportCustom">📅 Export Custom Range...</button>
+            <button class="btn btn-danger btn-sm" id="btnClearAllLogs" title="Clear all logged sessions">🗑️ Clear All Logs</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="logsTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Activity</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Duration</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer" id="logsTableFooter">Showing 0 sessions</div>
+      </div>
+    </section>
+
+    <!-- 4. ANALYSIS TAB -->
+    <section id="tab-analysis" class="tab-pane">
+      <div class="analysis-filter-bar">
+        <label for="analysisPeriodSelect"><b>Time Period:</b></label>
+        <select id="analysisPeriodSelect" class="styled-select filter-select">
+          <option value="Today" selected>Today</option>
+          <option value="Yesterday">Yesterday</option>
+          <option value="This Week">This Week</option>
+          <option value="Last 7 Days">Last 7 Days</option>
+          <option value="This Month">This Month</option>
+          <option value="Last 30 Days">Last 30 Days</option>
+          <option value="All Time">All Time</option>
+        </select>
+        <button id="btnRefreshAnalysis" class="btn btn-secondary" style="padding: 6px 14px; font-size: 13px;">Refresh Analysis</button>
+      </div>
+
+      <!-- Top Metric Cards -->
+      <div class="analysis-cards-row">
+        <!-- Goal & Streak Card -->
+        <div class="metric-card card">
+          <div class="card-section-title">Daily Goal &amp; Streaks</div>
+          <div class="metric-title" id="analysisGoalProgress">Today: 0 / 120 mins (0%)</div>
+          <div class="goal-progress-bar" style="margin: 8px 0; width: 100%;">
+            <div class="goal-progress-fill" id="analysisGoalFill" style="width: 0%;"></div>
+          </div>
+          <div class="metric-subtitle" id="analysisStreakLabel">Streak: 0 days 💤 (Max: 0 🏆)</div>
+        </div>
+
+        <!-- Total Sessions Card -->
+        <div class="metric-card card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+            <div class="card-section-title">Total Sessions</div>
+            <select id="analysisSessionTypeFilter" class="styled-select mini-select">
+              <option value="All" selected>All</option>
+              <option value="General">General</option>
+              <option value="Revision">Revision</option>
+              <option value="Questions">Questions</option>
+              <option value="Lecture">Lecture</option>
+            </select>
+          </div>
+          <div class="metric-value" id="analysisTotalSessions">0</div>
+          <div class="metric-subtitle" id="analysisAvgSessionDuration">Avg Duration: 00:00:00</div>
+          <div class="metric-subtitle" id="analysisStudyEfficiency">Study Efficiency: 100.0%</div>
+        </div>
+
+        <!-- Total Duration Card -->
+        <div class="metric-card card">
+          <div class="card-section-title">Total Duration</div>
+          <div class="metric-value font-mono" id="analysisTotalDuration">00:00:00</div>
+          <div class="metric-subtitle" id="analysisActiveDayAvg">Active Day Avg: 00:00:00</div>
+          <div class="metric-subtitle" id="analysisMostActiveSubject">Most Active: None</div>
+          <div class="metric-subtitle" id="analysisMidSessionBreaks">Mid-Session Breaks: 00:00:00</div>
+        </div>
+
+        <!-- Cognitive XP Card -->
+        <div class="metric-card card">
+          <div class="card-section-title">Cognitive XP</div>
+          <div class="metric-value" id="analysisNetXp">0 XP</div>
+          <div class="metric-subtitle" id="analysisXpBreakdown">Gained: +0 | Breaks: -0</div>
+          <div class="metric-subtitle" id="analysisXpAnalytics">Avg: 0.0/day | Peak: -</div>
+          <div class="metric-fineprint">1 XP/min study | -0.25 XP/min break</div>
+        </div>
+      </div>
+
+      <!-- Analysis Visual Charts (Day of Week Bar Chart & Daily Timeline) -->
+      <div class="analysis-visual-charts-row">
+        <div class="card chart-card">
+          <div class="card-header-row">
+            <h3>Weekly Study Distribution (Mon–Sun)</h3>
+            <span class="table-hint">Total hours per day of the week</span>
+          </div>
+          <div class="chart-canvas-container">
+            <canvas id="weeklyDayOfWeekChart" width="500" height="160"></canvas>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-header-row">
+            <h3 id="timelineChartTitle">Daily Study Timeline (24-Hour)</h3>
+            <span class="table-hint">Study blocks across the day</span>
+          </div>
+          <div class="chart-canvas-container">
+            <canvas id="dailyTimelineChart" width="500" height="160"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="analysis-tables-grid">
+        <!-- Subject Breakdown (All Time) -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>By Subject (All Time)</h3>
+            <span class="table-hint">Double-click row to view sessions</span>
+          </div>
+          <div class="table-container">
+            <table class="data-table interactive-table" id="subjectAnalysisTable">
+              <thead><tr><th>Subject</th><th>Duration</th></tr></thead>
+              <tbody id="subjectAnalysisBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Chapter in Subject (All Time) -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>By Chapter in Subject (All Time)</h3>
+            <span class="table-hint">Double-click row to view sessions</span>
+          </div>
+          <div class="table-container">
+            <table class="data-table interactive-table" id="chapterAnalysisTable">
+              <thead><tr><th>Subject - Chapter</th><th>Duration</th></tr></thead>
+              <tbody id="chapterAnalysisBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- By Activity (Filtered) -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>By Activity</h3>
+            <div class="filter-group-inline">
+              <label>Subject:</label>
+              <select id="analysisActivitySubjectFilter" class="styled-select mini-select"></select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table interactive-table" id="activityAnalysisTable">
+              <thead><tr><th>Activity</th><th>Duration</th><th>Questions Solved</th><th>Avg Time/Q</th></tr></thead>
+              <tbody id="activityAnalysisBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Revision by Topic (Filtered) -->
+        <div class="card">
+          <div class="card-header-row">
+            <h3>Revision by Topic</h3>
+            <span class="table-hint">Double-click row to view sessions</span>
+          </div>
+          <div class="table-container">
+            <table class="data-table interactive-table" id="revisionAnalysisTable">
+              <thead><tr><th>Topic</th><th>Duration</th></tr></thead>
+              <tbody id="revisionAnalysisBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Questions Solved by Topic (Filtered) -->
+        <div class="card span-full">
+          <div class="card-header-row" style="flex-wrap: wrap; gap: 8px;">
+            <h3>Questions Solved by Topic</h3>
+            <div style="display: flex; gap: 16px; align-items: center; margin-left: auto;">
+              <div class="filter-group-inline">
+                <label>Subject:</label>
+                <select id="analysisQuestionsSubjectFilter" class="styled-select mini-select"></select>
+              </div>
+              <div class="filter-group-inline">
+                <label>Type:</label>
+                <select id="analysisQuestionsTopicFilter" class="styled-select mini-select">
+                  <option value="All (Practice &amp; PYQ)" selected>All (Practice &amp; PYQ)</option>
+                  <option value="Practice Book">Practice Book</option>
+                  <option value="Previous Year">Previous Year</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table interactive-table" id="questionsTopicAnalysisTable">
+              <thead><tr><th>Topic</th><th>Duration</th><th>Questions Solved</th><th>Avg Time/Q</th></tr></thead>
+              <tbody id="questionsTopicAnalysisBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Daily XP Ledger & Comparison -->
+        <div class="card span-full">
+          <div class="card-header-row">
+            <h3>Daily XP Ledger &amp; Comparison</h3>
+            <span class="table-hint">Double-click date row to view that day's sessions</span>
+          </div>
+          <div class="table-container">
+            <table class="data-table interactive-table" id="dailyXpAnalysisTable">
+              <thead><tr><th>Date</th><th>Study Duration</th><th>Break Duration</th><th>XP Gained</th><th>XP Deducted</th><th>Net XP</th></tr></thead>
+              <tbody id="dailyXpAnalysisBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. INSIGHTS TAB -->
+    <section id="tab-insights" class="tab-pane">
+      <div class="insights-grid">
+        <div class="card insight-hero-card">
+          <div class="card-title">Burnout Risk Meter</div>
+          <div class="hero-metric-val" id="burnoutRiskVal">0%</div>
+          <div class="hero-metric-sub" id="burnoutStatusVal">Calculating...</div>
+        </div>
+        <div class="card insight-hero-card">
+          <div class="card-title">Productivity Index</div>
+          <div class="hero-metric-val" id="prodIndexVal">0/100</div>
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="prodProgressFill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div class="card span-2">
+          <h3>Warning Signs &amp; Recommendations</h3>
+          <div id="warningsList" class="warnings-box"></div>
+        </div>
+
+        <div class="card span-2">
+          <h3>7-Day Analytics Details</h3>
+          <div class="details-grid" id="insightsDetailsGrid"></div>
+        </div>
+
+        <div class="card span-2">
+          <h3>Preferences &amp; Notifications</h3>
+          <div class="settings-checkboxes">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkNotifications"> Enable Notifications
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkBreakReminders"> Enable 50-Min Break Reminders
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chkRememberBrowser"> Always launch in Browser (skip prompt)
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. SUBJECTS TAB -->
+    <section id="tab-subjects" class="tab-pane">
+      <div class="card subjects-card">
+        <h3>Manage Subjects</h3>
+        <p class="text-muted">Subjects configured here sync directly with the desktop application.</p>
+        <div class="add-subject-form">
+          <input type="text" id="newSubjectInput" placeholder="Enter new subject name..." class="styled-input">
+          <button class="btn btn-primary" id="btnAddSubject">Add Subject</button>
+        </div>
+        <div class="subjects-list-container">
+          <ul id="subjectsList" class="styled-list"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. AI ASSISTANT TAB -->
+    <section id="tab-ai" class="tab-pane">
+      <div class="card ai-card">
+        <div class="ai-header">
+          <div class="ai-header-left">
+            <span class="ai-avatar">🤖</span>
+            <div>
+              <div class="ai-title">AI Study Coach</div>
+              <div class="ai-subtitle text-muted">Powered by OpenRouter AI &bull; Analyzes your local study logs &amp; metrics</div>
+            </div>
+          </div>
+          <div class="ai-header-controls">
+            <label for="aiModelSelect" style="font-size: 12px; margin-right: 4px;">Model:</label>
+            <select id="aiModelSelect" class="styled-select" style="min-width: 200px;">
+              <option value="google/gemma-4-26b-a4b-it:free">google/gemma-4-26b-a4b-it:free (Default)</option>
+              <option value="openai/gpt-oss-120b:free">openai/gpt-oss-120b:free</option>
+              <option value="qwen/qwen3-next-80b-a3b-instruct:free">qwen/qwen3-next-80b-a3b-instruct:free</option>
+              <option value="nvidia/nemotron-3-super-120b-a12b:free">nvidia/nemotron-3-super-120b-a12b:free</option>
+              <option value="qwen/qwen3-coder:free">qwen/qwen3-coder:free</option>
+              <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" id="btnAiConfigureKey" title="Configure OpenRouter API Key">🔑 API Key</button>
+            <button class="btn btn-secondary btn-sm" id="btnAiClearHistory" title="Clear Chat History">🗑️ Clear Chat</button>
+          </div>
+        </div>
+
+        <!-- Suggestion Chips -->
+        <div class="ai-chips-bar">
+          <button class="ai-chip" data-prompt="Analyze my study patterns for the past 7 days. What are my strongest subjects, and where am I falling behind?">📊 Stats Summary</button>
+          <button class="ai-chip" data-prompt="Based on my recent study hours and break ratios, what is my burnout risk, and how can I optimize my rest?">🔥 Burnout Risk</button>
+          <button class="ai-chip" data-prompt="Give me 3 actionable tips to improve my daily focus, attention span, and minimize session pauses based on my logs.">💡 Focus Tips</button>
+          <button class="ai-chip" data-prompt="Evaluate my question-solving sessions. Am I spending the right amount of time per problem?">📝 Problem Solving Review</button>
+        </div>
+
+        <!-- Chat Messages Container -->
+        <div class="ai-chat-messages" id="aiChatMessages">
+          <!-- Messages will be populated by JS -->
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="ai-chat-input-bar">
+          <textarea id="aiMessageInput" placeholder="Ask your AI Study Coach about your study metrics, habits, or schedule advice..." rows="2"></textarea>
+          <button class="btn btn-primary" id="btnAiSendMessage">Send</button>
+        </div>
+        <div class="ai-status-bar" id="aiStatusBar"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modals -->
+
+  <!-- Drilldown Sessions Modal (Double Click Row Inspection) -->
+  <div class="modal-overlay hidden" id="drilldownSessionsModal">
+    <div class="modal-box" style="max-width: 820px; width: 90%;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="drilldownModalTitle">Recorded Sessions</h3>
+        <button class="calc-close" id="btnCloseDrilldownModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-footer" id="drilldownModalCount" style="margin-bottom: 10px; font-weight: 600;">0 sessions found</div>
+        <div class="table-container" style="max-height: 380px;">
+          <table class="data-table" id="drilldownSessionsTable">
+            <thead>
+              <tr>
+                <th>Start Time</th>
+                <th>Subject</th>
+                <th>Duration</th>
+                <th>Description</th>
+                <th>Pauses</th>
+                <th>Questions</th>
+              </tr>
+            </thead>
+            <tbody id="drilldownSessionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnDismissDrilldownModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interrupted Session Recovery Modal -->
+  <div class="modal-overlay hidden" id="recoveryModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title alert-title">⚠️ Interrupted Study Session Detected</h3>
+      </div>
+      <div class="modal-body" id="recoveryDetails"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnResumeRecovered">Resume Session</button>
+        <button class="btn btn-success" id="btnSaveRecovered">Save &amp; Log Now</button>
+        <button class="btn btn-secondary" id="btnDiscardRecovered">Discard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions Solved Prompt Modal -->
+  <div class="modal-overlay hidden" id="questionsPromptModal">
+    <div class="modal-box small-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Questions Solved</h3>
+      </div>
+      <div class="modal-body">
+        <p>How many questions did you solve during this session?</p>
+        <input type="number" id="questionsSolvedCountInput" min="0" placeholder="0" class="styled-input full-width">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnConfirmQuestions">Submit &amp; Log</button>
+        <button class="btn btn-secondary" id="btnSkipQuestions">Skip</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scientific Calculator Modal -->
+  <div class="modal-overlay hidden" id="calcModal">
+    <div class="modal-box calc-box">
+      <div class="calc-header">
+        <span>Scientific Calculator</span>
+        <button class="calc-close" id="btnCloseCalc">✕</button>
+      </div>
+      <div class="calc-body">
+        <div class="calc-history" id="calcHistory"></div>
+        <input type="text" class="calc-display" id="calcDisplay" readonly value="0">
+        <div class="calc-keypad">
+          <button class="c-btn fn">sin</button>
+          <button class="c-btn fn">cos</button>
+          <button class="c-btn fn">tan</button>
+          <button class="c-btn fn">ln</button>
+          <button class="c-btn fn">log</button>
+          <button class="c-btn fn">√</button>
+          <button class="c-btn fn">x²</button>
+          <button class="c-btn fn">xʸ</button>
+          <button class="c-btn fn">π</button>
+          <button class="c-btn fn">e</button>
+          <button class="c-btn op">(</button>
+          <button class="c-btn op">)</button>
+          <button class="c-btn op">C</button>
+          <button class="c-btn op">⌫</button>
+          <button class="c-btn op">÷</button>
+          <button class="c-btn num">7</button>
+          <button class="c-btn num">8</button>
+          <button class="c-btn num">9</button>
+          <button class="c-btn op">×</button>
+          <button class="c-btn fn">1/x</button>
+          <button class="c-btn num">4</button>
+          <button class="c-btn num">5</button>
+          <button class="c-btn num">6</button>
+          <button class="c-btn op">-</button>
+          <button class="c-btn fn">|x|</button>
+          <button class="c-btn num">1</button>
+          <button class="c-btn num">2</button>
+          <button class="c-btn num">3</button>
+          <button class="c-btn op">+</button>
+          <button class="c-btn fn">%</button>
+          <button class="c-btn num">0</button>
+          <button class="c-btn num">.</button>
+          <button class="c-btn fn">±</button>
+          <button class="c-btn eq">=</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Session Modal -->
+  <div class="modal-overlay hidden" id="editSessionModal">
+    <div class="modal-box" style="max-width: 520px; width: 90%;">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Session Record</h3>
+        <button class="calc-close" id="btnCloseEditModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="editSessionForm" class="edit-form-grid">
+          <input type="hidden" id="editSessionIndex">
+          <div class="form-group">
+            <label>Subject</label>
+            <select id="editSessionSubject" class="styled-select" required></select>
+          </div>
+          <div class="form-group">
+            <label>Activity Type</label>
+            <select id="editSessionType" class="styled-select">
+              <option value="STOPWATCH">STOPWATCH</option>
+              <option value="TIMER">TIMER</option>
+            </select>
+          </div>
+          <div class="form-group span-2">
+            <label>Description / Activity Detail</label>
+            <input type="text" id="editSessionDesc" class="styled-input" placeholder="Description...">
+          </div>
+          <div class="form-group">
+            <label>Start Time (YYYY-MM-DDTHH:MM:SS)</label>
+            <input type="text" id="editSessionStart" class="styled-input font-mono" placeholder="2026-09-27T10:00:00" required>
+          </div>
+          <div class="form-group">
+            <label>End Time (YYYY-MM-DDTHH:MM:SS)</label>
+            <input type="text" id="editSessionEnd" class="styled-input font-mono" placeholder="2026-09-27T11:00:00" required>
+          </div>
+          <div class="form-group">
+            <label>Duration (Seconds)</label>
+            <input type="number" id="editSessionDuration" min="0" class="styled-input font-mono" required>
+          </div>
+          <div class="form-group">
+            <label>Pauses Count</label>
+            <input type="number" id="editSessionPauses" min="0" class="styled-input font-mono">
+          </div>
+          <div class="form-group span-2">
+            <label>Questions Solved</label>
+            <input type="number" id="editSessionQuestions" min="0" class="styled-input font-mono">
+          </div>
+        </form>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnSaveEditSession">Save Changes</button>
+        <button class="btn btn-secondary" id="btnCancelEditSession">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Export Range Modal -->
+  <div class="modal-overlay hidden" id="customExportModal">
+    <div class="modal-box small-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Export Custom Date Range</h3>
+        <button class="calc-close" id="btnCloseCustomExport">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Start Date</label>
+          <input type="date" id="exportStartDate" class="styled-input full-width">
+        </div>
+        <div class="form-group">
+          <label>End Date</label>
+          <input type="date" id="exportEndDate" class="styled-input full-width">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnConfirmCustomExport">Download XLSX</button>
+        <button class="btn btn-secondary" id="btnCancelCustomExport">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Set Daily Goal Modal -->
+  <div class="modal-overlay hidden" id="setGoalModal">
+    <div class="modal-box small-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Set Daily Study Goal</h3>
+        <button class="calc-close" id="btnCloseGoalModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px;">Enter your target study hours and minutes per day:</p>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <div class="form-group" style="flex: 1;">
+            <label>Hours</label>
+            <input type="number" id="goalHoursInput" min="0" max="24" value="2" class="styled-input full-width">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label>Minutes</label>
+            <input type="number" id="goalMinutesInput" min="0" max="59" value="0" class="styled-input full-width">
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnSaveGoal">Save Goal</button>
+        <button class="btn btn-secondary" id="btnCancelGoal">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Help Modal (F1) -->
+  <div class="modal-overlay hidden" id="shortcutsModal">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">⌨️ Keyboard Shortcuts</h3>
+        <button class="calc-close" id="btnCloseShortcuts">✕</button>
+      </div>
+      <div class="modal-body">
+        <table class="shortcuts-table" style="width: 100%; border-collapse: collapse;">
+          <tbody>
+            <tr><td style="padding: 6px;"><kbd>F1</kbd></td><td>Keyboard shortcuts help dialog</td></tr>
+            <tr><td style="padding: 6px;"><kbd>Space</kbd></td><td>Start / Pause timer or stopwatch</td></tr>
+            <tr><td style="padding: 6px;"><kbd>Alt</kbd> + <kbd>S</kbd></td><td>Stop &amp; log current session</td></tr>
+            <tr><td style="padding: 6px;"><kbd>Alt</kbd> + <kbd>R</kbd></td><td>Reset current stopwatch/timer</td></tr>
+            <tr><td style="padding: 6px;"><kbd>Alt</kbd> + <kbd>1..7</kbd></td><td>Switch between tabs</td></tr>
+            <tr><td style="padding: 6px;"><kbd>Esc</kbd></td><td>Close any open modal or dialog</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnDismissShortcuts">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI API Key Configuration Modal -->
+  <div class="modal-overlay hidden" id="aiKeyModal">
+    <div class="modal-box small-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">OpenRouter API Key</h3>
+        <button class="calc-close" id="btnCloseAiKeyModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 10px; font-size: 13px;">Get a free API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>. Free models like Gemma 27B and Nemotron do not require credits.</p>
+        <input type="password" id="aiApiKeyInput" placeholder="sk-or-v1-..." class="styled-input full-width font-mono">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnSaveAiKey">Save Key</button>
+        <button class="btn btn-secondary" id="btnCancelAiKey">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
