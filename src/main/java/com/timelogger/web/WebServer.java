@@ -56,6 +56,7 @@ public class WebServer {
         server.createContext("/api/theme", new ThemeHandler());
         server.createContext("/api/settings", new SettingsHandler());
         server.createContext("/api/insights", new InsightsHandler());
+        server.createContext("/api/reminders", new RemindersHandler());
         server.createContext("/api/export", new ExportHandler());
         server.createContext("/api/switch-mode", new SwitchModeHandler());
         server.createContext("/api/exit", new ExitHandler());
@@ -1347,6 +1348,158 @@ public class WebServer {
                     break;
             }
         }
+        return sb.toString();
+    }
+
+    private class RemindersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleCors(exchange);
+                return;
+            }
+            String method = exchange.getRequestMethod().toUpperCase();
+            if ("GET".equals(method)) {
+                List<ReminderItem> list = storageService.loadReminders();
+                StringBuilder sb = new StringBuilder("[");
+                for (int i = 0; i < list.size(); i++) {
+                    sb.append(reminderItemToJson(list.get(i)));
+                    if (i < list.size() - 1) sb.append(",");
+                }
+                sb.append("]");
+                sendJson(exchange, 200, sb.toString());
+            } else if ("POST".equals(method)) {
+                String body = readBody(exchange);
+                Map<String, String> d = parseJsonSimple(body);
+                String title = d.getOrDefault("title", "").trim();
+                if (title.isEmpty()) {
+                    sendJson(exchange, 400, "{\"error\":\"Title required\"}");
+                    return;
+                }
+                ReminderItem item = new ReminderItem();
+                item.setTitle(title);
+                item.setNotes(d.getOrDefault("notes", "").trim());
+                item.setSubject(d.getOrDefault("subject", "General"));
+                
+                String dateStr = d.get("dueDate");
+                if (dateStr != null && !dateStr.isEmpty() && !"null".equalsIgnoreCase(dateStr)) {
+                    item.setDueDate(LocalDate.parse(dateStr));
+                }
+                
+                String periodStr = d.get("period");
+                if (periodStr != null) {
+                    item.setPeriod(ReminderItem.TimePeriod.fromString(periodStr));
+                    item.setDueTime(item.getPeriod().getDefaultTime());
+                }
+
+                String prioStr = d.get("priority");
+                if (prioStr != null) {
+                    item.setPriority(ReminderItem.Priority.fromString(prioStr));
+                }
+
+                if (d.containsKey("flagged")) {
+                    item.setFlagged(Boolean.parseBoolean(d.get("flagged")));
+                }
+
+                List<ReminderItem> all = storageService.loadReminders();
+                all.add(0, item);
+                storageService.saveReminders(all);
+                sendJson(exchange, 200, "{\"success\":true,\"id\":\"" + item.getId() + "\"}");
+            } else if ("PUT".equals(method)) {
+                String body = readBody(exchange);
+                Map<String, String> d = parseJsonSimple(body);
+                String id = d.get("id");
+                if (id == null || id.isEmpty()) {
+                    sendJson(exchange, 400, "{\"error\":\"ID required\"}");
+                    return;
+                }
+                List<ReminderItem> all = storageService.loadReminders();
+                boolean updated = false;
+                for (ReminderItem item : all) {
+                    if (item.getId().equals(id)) {
+                        if (d.containsKey("completed")) {
+                            item.setCompleted(Boolean.parseBoolean(d.get("completed")));
+                        }
+                        if (d.containsKey("flagged")) {
+                            item.setFlagged(Boolean.parseBoolean(d.get("flagged")));
+                        }
+                        if (d.containsKey("title")) {
+                            item.setTitle(d.get("title").trim());
+                        }
+                        if (d.containsKey("notes")) {
+                            item.setNotes(d.get("notes").trim());
+                        }
+                        if (d.containsKey("subject")) {
+                            item.setSubject(d.get("subject").trim());
+                        }
+                        if (d.containsKey("period")) {
+                            item.setPeriod(ReminderItem.TimePeriod.fromString(d.get("period")));
+                            item.setDueTime(item.getPeriod().getDefaultTime());
+                        }
+                        if (d.containsKey("dueDate")) {
+                            String ds = d.get("dueDate");
+                            if (ds != null && !ds.isEmpty() && !"null".equalsIgnoreCase(ds)) {
+                                item.setDueDate(LocalDate.parse(ds));
+                            }
+                        }
+                        if (d.containsKey("priority")) {
+                            item.setPriority(ReminderItem.Priority.fromString(d.get("priority")));
+                        }
+                        updated = true;
+                        break;
+                    }
+                }
+                if (updated) {
+                    storageService.saveReminders(all);
+                    sendJson(exchange, 200, "{\"success\":true}");
+                } else {
+                    sendJson(exchange, 404, "{\"error\":\"Not found\"}");
+                }
+            } else if ("DELETE".equals(method)) {
+                String query = exchange.getRequestURI().getQuery();
+                String id = null;
+                if (query != null && query.startsWith("id=")) {
+                    id = query.substring(3);
+                }
+                if (id == null || id.isEmpty()) {
+                    String body = readBody(exchange);
+                    Map<String, String> d = parseJsonSimple(body);
+                    id = d.get("id");
+                }
+                if (id == null || id.isEmpty()) {
+                    sendJson(exchange, 400, "{\"error\":\"ID required\"}");
+                    return;
+                }
+                List<ReminderItem> all = storageService.loadReminders();
+                final String targetId = id;
+                boolean removed = all.removeIf(r -> r.getId().equals(targetId));
+                if (removed) {
+                    storageService.saveReminders(all);
+                    sendJson(exchange, 200, "{\"success\":true}");
+                } else {
+                    sendJson(exchange, 404, "{\"error\":\"Not found\"}");
+                }
+            } else {
+                sendResponse(exchange, 405, "text/plain", "Method Not Allowed");
+            }
+        }
+    }
+
+    private static String reminderItemToJson(ReminderItem r) {
+        StringBuilder sb = new StringBuilder("{");
+        sb.append("\"id\":\"").append(escapeJson(r.getId())).append("\",");
+        sb.append("\"title\":\"").append(escapeJson(r.getTitle())).append("\",");
+        sb.append("\"notes\":\"").append(escapeJson(r.getNotes())).append("\",");
+        sb.append("\"dueDate\":").append(r.getDueDate() == null ? "null" : "\"" + r.getDueDate() + "\"").append(",");
+        sb.append("\"dueTime\":").append(r.getDueTime() == null ? "null" : "\"" + r.getDueTime() + "\"").append(",");
+        sb.append("\"period\":\"").append(r.getPeriod() == null ? "ALL_DAY" : r.getPeriod().name()).append("\",");
+        sb.append("\"subject\":\"").append(escapeJson(r.getSubject())).append("\",");
+        sb.append("\"priority\":\"").append(r.getPriority() == null ? "NONE" : r.getPriority().name()).append("\",");
+        sb.append("\"flagged\":").append(r.isFlagged()).append(",");
+        sb.append("\"completed\":").append(r.isCompleted()).append(",");
+        sb.append("\"completedAt\":").append(r.getCompletedAt() == null ? "null" : "\"" + r.getCompletedAt() + "\"").append(",");
+        sb.append("\"createdAt\":").append(r.getCreatedAt() == null ? "null" : "\"" + r.getCreatedAt() + "\"");
+        sb.append("}");
         return sb.toString();
     }
 

@@ -43,6 +43,7 @@
     <button class="tab-btn" data-tab="logs">Logs</button>
     <button class="tab-btn" data-tab="analysis">Analysis</button>
     <button class="tab-btn" data-tab="insights">Insights</button>
+    <button class="tab-btn" data-tab="reminders">Reminders</button>
     <button class="tab-btn" data-tab="subjects">Subjects</button>
     <button class="tab-btn" data-tab="ai">AI Assistant</button>
   </nav>
@@ -441,7 +442,168 @@
       </div>
     </section>
 
-    <!-- 6. SUBJECTS TAB -->
+    <!-- 6. REMINDERS TAB (Apple Reminders Style) -->
+    <section id="tab-reminders" class="tab-pane">
+      <div class="reminders-container">
+        
+        <!-- Apple Smart Metric Cards Grid -->
+        <div class="reminders-cards-grid">
+          <div class="rem-card active" data-filter="TODAY">
+            <div class="rem-card-top">
+              <span class="rem-card-icon">☀️</span>
+              <span class="rem-card-count" id="remCountToday">0</span>
+            </div>
+            <div class="rem-card-title">Today</div>
+          </div>
+          <div class="rem-card" data-filter="SCHEDULED">
+            <div class="rem-card-top">
+              <span class="rem-card-icon">📅</span>
+              <span class="rem-card-count" id="remCountScheduled">0</span>
+            </div>
+            <div class="rem-card-title">Scheduled</div>
+          </div>
+          <div class="rem-card" data-filter="ALL">
+            <div class="rem-card-top">
+              <span class="rem-card-icon">📋</span>
+              <span class="rem-card-count" id="remCountAll">0</span>
+            </div>
+            <div class="rem-card-title">All</div>
+          </div>
+          <div class="rem-card" data-filter="FLAGGED">
+            <div class="rem-card-top">
+              <span class="rem-card-icon">🚩</span>
+              <span class="rem-card-count" id="remCountFlagged">0</span>
+            </div>
+            <div class="rem-card-title">Flagged</div>
+          </div>
+          <div class="rem-card" data-filter="COMPLETED">
+            <div class="rem-card-top">
+              <span class="rem-card-icon">✅</span>
+              <span class="rem-card-count" id="remCountCompleted">0</span>
+            </div>
+            <div class="rem-card-title">Completed</div>
+          </div>
+        </div>
+
+        <!-- Reminders Header & Quick Add Button -->
+        <div class="reminders-header-row">
+          <div>
+            <h2 id="remindersViewHeading">Today</h2>
+            <span class="text-muted" id="remindersViewCount">0 Reminders</span>
+          </div>
+          <button class="btn btn-primary" id="btnOpenNewReminderModal">+ New Reminder</button>
+        </div>
+
+        <!-- Grouped List View (Periods: Morning, Afternoon, Evening, Any Time) -->
+        <div id="remindersListWrapper" class="reminders-list-wrapper"></div>
+      </div>
+
+      <!-- Add / Edit Reminder Modal -->
+      <div class="modal hidden" id="reminderModal">
+        <div class="modal-content reminder-modal-content">
+          <div class="modal-header">
+            <h3 id="reminderModalTitle">New Reminder</h3>
+            <button class="modal-close" id="btnCloseReminderModal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Title *</label>
+              <input type="text" id="remModalTitleInput" class="styled-input" placeholder="e.g. Review Thermodynamics DPP 4">
+            </div>
+            <div class="form-group">
+              <label>Notes / Details (Optional)</label>
+              <textarea id="remModalNotesInput" class="styled-input" rows="3" placeholder="Add study steps or notes..."></textarea>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Subject</label>
+                <select id="remModalSubjectSelect" class="styled-select"></select>
+              </div>
+              <div class="form-group">
+                <label>Priority</label>
+                <select id="remModalPrioritySelect" class="styled-select">
+                  <option value="NONE">None</option>
+                  <option value="LOW">! Low</option>
+                  <option value="MEDIUM">!! Medium</option>
+                  <option value="HIGH">!!! High</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group-row">
+              <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" id="remModalDateInput" class="styled-input">
+              </div>
+              <div class="form-group">
+                <label>Due Time (30-min list or custom)</label>
+                <input type="text" id="remModalTimeInput" list="reminderTimeSlots" class="styled-input" placeholder="09:00 AM">
+                <datalist id="reminderTimeSlots">
+                  <option value="12:00 AM"></option>
+                  <option value="12:30 AM"></option>
+                  <option value="01:00 AM"></option>
+                  <option value="01:30 AM"></option>
+                  <option value="02:00 AM"></option>
+                  <option value="02:30 AM"></option>
+                  <option value="03:00 AM"></option>
+                  <option value="03:30 AM"></option>
+                  <option value="04:00 AM"></option>
+                  <option value="04:30 AM"></option>
+                  <option value="05:00 AM"></option>
+                  <option value="05:30 AM"></option>
+                  <option value="06:00 AM"></option>
+                  <option value="06:30 AM"></option>
+                  <option value="07:00 AM"></option>
+                  <option value="07:30 AM"></option>
+                  <option value="08:00 AM"></option>
+                  <option value="08:30 AM"></option>
+                  <option value="09:00 AM"></option>
+                  <option value="09:30 AM"></option>
+                  <option value="10:00 AM"></option>
+                  <option value="10:30 AM"></option>
+                  <option value="11:00 AM"></option>
+                  <option value="11:30 AM"></option>
+                  <option value="12:00 PM"></option>
+                  <option value="12:30 PM"></option>
+                  <option value="01:00 PM"></option>
+                  <option value="01:30 PM"></option>
+                  <option value="02:00 PM"></option>
+                  <option value="02:30 PM"></option>
+                  <option value="03:00 PM"></option>
+                  <option value="03:30 PM"></option>
+                  <option value="04:00 PM"></option>
+                  <option value="04:30 PM"></option>
+                  <option value="05:00 PM"></option>
+                  <option value="05:30 PM"></option>
+                  <option value="06:00 PM"></option>
+                  <option value="06:30 PM"></option>
+                  <option value="07:00 PM"></option>
+                  <option value="07:30 PM"></option>
+                  <option value="08:00 PM"></option>
+                  <option value="08:30 PM"></option>
+                  <option value="09:00 PM"></option>
+                  <option value="09:30 PM"></option>
+                  <option value="10:00 PM"></option>
+                  <option value="10:30 PM"></option>
+                  <option value="11:00 PM"></option>
+                  <option value="11:30 PM"></option>
+                </datalist>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="remModalFlaggedInput"> 🚩 Flag this reminder
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="btnCancelReminderModal">Cancel</button>
+            <button class="btn btn-primary" id="btnSaveReminderModal">Save Reminder</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. SUBJECTS TAB -->
     <section id="tab-subjects" class="tab-pane">
       <div class="card subjects-card">
         <h3>Manage Subjects</h3>

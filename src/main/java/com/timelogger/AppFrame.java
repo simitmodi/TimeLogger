@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 public class AppFrame extends JFrame {
     private final StorageService storageService = new StorageService();
     private final ExportService exportService = new ExportService();
+    private final ReminderService reminderService = new ReminderService(storageService);
+    private RemindersPanel remindersPanel;
 
     // --- System Tray and Notifications ---
     private TrayIcon trayIcon = null;
@@ -130,7 +132,7 @@ public class AppFrame extends JFrame {
     final JTextField stopwatchLectureField = new JTextField(5);
     final JTextField stopwatchRevisionTopicField = new JTextField(20);
     private final ModernButton stopwatchStartButton = new ModernButton("Start", ModernButton.ButtonStyle.PRIMARY);
-    private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.STANDARD);
+    private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.WARNING);
     private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log", ModernButton.ButtonStyle.SUCCESS);
     private final ModernButton stopwatchResetButton = new ModernButton("Reset", ModernButton.ButtonStyle.OUTLINE);
 
@@ -150,7 +152,7 @@ public class AppFrame extends JFrame {
     private final JSpinner secondsSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 59, 1));
     final JComboBox<String> timerSubjectCombo = new JComboBox<>();
     private final ModernButton timerStartButton = new ModernButton("Start", ModernButton.ButtonStyle.PRIMARY);
-    private final ModernButton timerPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.STANDARD);
+    private final ModernButton timerPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.WARNING);
     private final ModernButton timerStopButton = new ModernButton("Stop", ModernButton.ButtonStyle.SUCCESS);
     private final ModernButton timerResetButton = new ModernButton("Reset", ModernButton.ButtonStyle.OUTLINE);
 
@@ -353,6 +355,10 @@ public class AppFrame extends JFrame {
             int selectedIdx = tabs.getSelectedIndex();
             if (selectedIdx == tabs.indexOfTab("Insights")) {
                 refreshInsights();
+            } else if (selectedIdx == tabs.indexOfTab("Reminders")) {
+                if (remindersPanel != null) {
+                    remindersPanel.refreshView();
+                }
             } else if (selectedIdx == tabs.indexOfTab("AI Assistant")) {
                 showChatInterface();
             }
@@ -593,8 +599,20 @@ public class AppFrame extends JFrame {
         tabs.addTab("Logs", createLogsPanel());
         tabs.addTab("Analysis", createAnalysisPanel());
         tabs.addTab("Insights", createInsightsPanel());
+        this.remindersPanel = new RemindersPanel(storageService, reminderService);
+        tabs.addTab("Reminders", remindersPanel);
         tabs.addTab("Subjects", createSubjectsPanel());
         tabs.addTab("AI Assistant", createAiAssistantPanel());
+
+        // Connect reminder alerts to desktop notifications
+        this.reminderService.setNotificationTrigger(item -> {
+            String title = "Reminder: " + item.getTitle();
+            String details = (item.getSubject() != null && !item.getSubject().isEmpty() ? "[" + item.getSubject() + "] " : "")
+                    + (item.getNotes() != null && !item.getNotes().isEmpty() ? item.getNotes() : "Scheduled task is due now.");
+            sendNotification(title, details, TrayIcon.MessageType.INFO);
+            spawnWindowsNotification(title, details, "info");
+        });
+
         return tabs;
     }
 

@@ -967,3 +967,259 @@ body.theme-hc .topbar-btn.secondary {
   margin-top: 4px;
 }
 
+/* =========================================
+   Apple-Style Reminders Dashboard
+   ========================================= */
+.reminders-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.reminders-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.rem-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+
+.rem-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-color);
+}
+
+.rem-card.active {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1.5px var(--accent-color);
+}
+
+.rem-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.rem-card-icon {
+  font-size: 20px;
+}
+
+.rem-card-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+.rem-card[data-filter="SCHEDULED"] .rem-card-count { color: #ff3b30; }
+.rem-card[data-filter="ALL"] .rem-card-count { color: #8e8e93; }
+.rem-card[data-filter="FLAGGED"] .rem-card-count { color: #ff9500; }
+.rem-card[data-filter="COMPLETED"] .rem-card-count { color: #34c759; }
+
+.rem-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.reminders-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.reminders-header-row h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-color);
+  margin-bottom: 2px;
+}
+
+.reminders-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rem-period-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rem-period-heading {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding-left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rem-period-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.rem-item-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 14px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.15s ease;
+}
+
+.rem-item-row:last-child {
+  border-bottom: none;
+}
+
+.rem-item-row:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+body.theme-dark .rem-item-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Apple Circular Checkbox */
+.rem-circle-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.rem-circle-check:hover {
+  border-color: var(--accent-color);
+}
+
+.rem-circle-check.completed {
+  background: #34c759;
+  border-color: #34c759;
+  color: #fff;
+}
+
+.rem-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rem-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rem-item-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-color);
+  word-break: break-word;
+}
+
+.rem-item-row.is-completed .rem-item-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.rem-priority-badge {
+  font-weight: 700;
+  color: #ff3b30;
+  font-size: 13px;
+}
+
+.rem-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.rem-subject-pill {
+  padding: 1px 8px;
+  border-radius: 12px;
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--accent-color);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.rem-item-notes {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.rem-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rem-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.rem-icon-btn:hover {
+  opacity: 1;
+}
+
+.rem-empty-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.rem-empty-icon {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+.rem-empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.reminder-modal-content {
+  max-width: 520px;
+}
+

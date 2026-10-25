@@ -117,6 +117,7 @@
     initShortcuts();
     initGoalModal();
     initAiCoach();
+    initReminders();
   });
 
   // --- Tab Navigation ---
@@ -131,6 +132,7 @@
 
         if (btn.dataset.tab === 'analysis') renderAnalysis();
         if (btn.dataset.tab === 'insights') renderInsights();
+        if (btn.dataset.tab === 'reminders') loadReminders();
         if (btn.dataset.tab === 'ai') loadAiChat();
       });
     });
@@ -2396,6 +2398,496 @@
     const s = Math.round(sec % 60);
     if (m === 0) return `${s}s`;
     return `${m}m ${s}s`;
+  }
+
+  // --- Apple-Style Reminders Dashboard Implementation ---
+  let remindersData = [];
+  let currentReminderFilter = 'TODAY';
+  let editingReminderId = null;
+
+  function initReminders() {
+    const remCards = document.querySelectorAll('.rem-card');
+    remCards.forEach(card => {
+      card.addEventListener('click', () => {
+        remCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        currentReminderFilter = card.dataset.filter;
+        renderRemindersList();
+      });
+    });
+
+    const btnOpenModal = document.getElementById('btnOpenNewReminderModal');
+    const modal = document.getElementById('reminderModal');
+    const btnCloseModal = document.getElementById('btnCloseReminderModal');
+    const btnCancelModal = document.getElementById('btnCancelReminderModal');
+    const btnSaveModal = document.getElementById('btnSaveReminderModal');
+
+    if (btnOpenModal) {
+      btnOpenModal.addEventListener('click', () => {
+        openReminderModal(null);
+      });
+    }
+
+    if (btnCloseModal) btnCloseModal.addEventListener('click', () => modal.classList.add('hidden'));
+    if (btnCancelModal) btnCancelModal.addEventListener('click', () => modal.classList.add('hidden'));
+
+    if (btnSaveModal) {
+      btnSaveModal.addEventListener('click', saveReminderFromModal);
+    }
+  }
+
+  async function loadReminders() {
+    try {
+      const res = await fetch('/api/reminders');
+      if (res.ok) {
+        remindersData = await res.json();
+        updateReminderBadges();
+        renderRemindersList();
+      }
+    } catch (e) {
+      console.error('Failed to load reminders', e);
+    }
+  }
+
+  function updateReminderBadges() {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const today = remindersData.filter(r => !r.completed && (r.dueDate === todayStr || (r.dueDate && r.dueDate < todayStr))).length;
+    const sched = remindersData.filter(r => !r.completed && r.dueDate).length;
+    const all = remindersData.filter(r => !r.completed).length;
+    const flagged = remindersData.filter(r => !r.completed && r.flagged).length;
+    const comp = remindersData.filter(r => r.completed).length;
+
+    const elToday = document.getElementById('remCountToday');
+    const elSched = document.getElementById('remCountScheduled');
+    const elAll = document.getElementById('remCountAll');
+    const elFlag = document.getElementById('remCountFlagged');
+    const elComp = document.getElementById('remCountCompleted');
+
+    if (elToday) elToday.textContent = today;
+    if (elSched) elSched.textContent = sched;
+    if (elAll) elAll.textContent = all;
+    if (elFlag) elFlag.textContent = flagged;
+    if (elComp) elComp.textContent = comp;
+  }
+
+  function renderRemindersList() {
+    const wrapper = document.getElementById('remindersListWrapper');
+    const heading = document.getElementById('remindersViewHeading');
+    const countText = document.getElementById('remindersViewCount');
+    if (!wrapper) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    let filtered = [];
+
+    switch (currentReminderFilter) {
+      case 'TODAY':
+        heading.textContent = 'Today';
+        filtered = remindersData.filter(r => !r.completed && (r.dueDate === todayStr || (r.dueDate && r.dueDate < todayStr)));
+        break;
+      case 'SCHEDULED':
+        heading.textContent = 'Scheduled';
+        filtered = remindersData.filter(r => !r.completed && r.dueDate);
+        break;
+      case 'FLAGGED':
+        heading.textContent = 'Flagged';
+        filtered = remindersData.filter(r => !r.completed && r.flagged);
+        break;
+      case 'COMPLETED':
+        heading.textContent = 'Completed';
+        filtered = remindersData.filter(r => r.completed);
+        break;
+      case 'ALL':
+      default:
+        heading.textContent = 'All Reminders';
+        filtered = remindersData.filter(r => !r.completed);
+        break;
+    }
+
+    countText.textContent = `${filtered.length} ${filtered.length === 1 ? 'Reminder' : 'Reminders'}`;
+    wrapper.innerHTML = '';
+
+    if (filtered.length === 0) {
+      wrapper.innerHTML = `
+        <div class="rem-empty-box">
+          <div class="rem-empty-icon">✨</div>
+          <div class="rem-empty-title">No Reminders in ${heading.textContent}</div>
+          <p class="text-muted">Click "+ New Reminder" above to add study tasks.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // When in TODAY view: group by Day Periods
+    if (currentReminderFilter === 'TODAY') {
+      const periods = [
+        { key: 'MORNING', label: '☀️ Morning (09:00 AM)' },
+        { key: 'AFTERNOON', label: '🌤️ Afternoon (02:00 PM)' },
+        { key: 'EVENING', label: '🌙 Evening (07:00 PM)' },
+        { key: 'NIGHT', label: '🌌 Night (09:30 PM)' },
+        { key: 'ALL_DAY', label: '📋 Any Time / All Day' }
+      ];
+
+      periods.forEach(p => {
+        const groupItems = filtered.filter(item => (item.period || 'ALL_DAY') === p.key);
+        if (groupItems.length > 0) {
+          const groupEl = document.createElement('div');
+          groupEl.className = 'rem-period-group';
+          groupEl.innerHTML = `
+            <div class="rem-period-heading">${p.label} <span class="text-muted">(${groupItems.length})</span></div>
+            <div class="rem-period-box"></div>
+          `;
+          const box = groupEl.querySelector('.rem-period-box');
+          groupItems.forEach(item => box.appendChild(createReminderRowElement(item)));
+          wrapper.appendChild(groupEl);
+        }
+      });
+    } else {
+      // Apple Scheduled timeline view (Today, Tomorrow, Day by Day, Rest of Month, Future Months)
+      renderWebScheduledTimeline(filtered, wrapper);
+    }
+  }
+
+  function renderWebScheduledTimeline(items, wrapper) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+
+    // Sort items chronologically
+    const sorted = [...items].sort((a, b) => {
+      const da = a.dueDate || '';
+      const db = b.dueDate || '';
+      if (da !== db) return da.localeCompare(db);
+      const ta = a.dueTime || '';
+      const tb = b.dueTime || '';
+      return ta.localeCompare(tb);
+    });
+
+    const overdueItems = [];
+    const todayItems = [];
+    const tomorrowItems = [];
+    const dayByDayItems = {};
+    const restOfMonthItems = [];
+    const futureMonthsItems = {};
+
+    sorted.forEach(r => {
+      const dStr = r.dueDate;
+      if (!dStr) {
+        todayItems.push(r);
+        return;
+      }
+      const d = new Date(dStr + 'T00:00:00');
+      if (d < today) {
+        overdueItems.push(r);
+      } else if (dStr === todayStr) {
+        todayItems.push(r);
+      } else if (dStr === tomorrowStr) {
+        tomorrowItems.push(r);
+      } else if (d < nextWeek) {
+        if (!dayByDayItems[dStr]) dayByDayItems[dStr] = [];
+        dayByDayItems[dStr].push(r);
+      } else if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
+        restOfMonthItems.push(r);
+      } else {
+        const ymKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!futureMonthsItems[ymKey]) futureMonthsItems[ymKey] = { date: d, list: [] };
+        futureMonthsItems[ymKey].list.push(r);
+      }
+    });
+
+    // Helper to render date section box matching Apple Reminders
+    const renderSection = (title, list, isOverdue = false) => {
+      if (isOverdue && (!list || list.length === 0)) return;
+      const count = list ? list.length : 0;
+      const countBadge = count > 0 ? ` <span class="text-muted">(${count})</span>` : '';
+      const groupEl = document.createElement('div');
+      groupEl.className = 'rem-period-group';
+      groupEl.innerHTML = `
+        <div class="rem-period-heading" style="${isOverdue ? 'color:#ff453a;' : ''}">
+          ${title}${countBadge}
+        </div>
+        <div class="rem-period-box"></div>
+      `;
+      const box = groupEl.querySelector('.rem-period-box');
+      if (count === 0) {
+        box.innerHTML = `
+          <div style="padding:10px 16px;display:flex;align-items:center;">
+            <span style="width:20px;height:20px;border-radius:50%;border:2px dashed var(--border-color);display:inline-block;opacity:0.6;"></span>
+          </div>`;
+      } else {
+        list.forEach(item => box.appendChild(createReminderRowElement(item)));
+      }
+      wrapper.appendChild(groupEl);
+    };
+
+    if (overdueItems.length > 0) {
+      renderSection('⚠️ Overdue', overdueItems, true);
+    }
+    renderSection('Today', todayItems);
+    renderSection('Tomorrow', tomorrowItems);
+
+    // Upcoming 5 individual days
+    for (let i = 2; i <= 6; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dStr = d.toISOString().split('T')[0];
+      const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+      renderSection(dayLabel, dayByDayItems[dStr] || []);
+    }
+
+    // Rest of Month
+    const curMonthName = today.toLocaleDateString('en-US', { month: 'long' });
+    renderSection(`Rest of ${curMonthName}`, restOfMonthItems);
+
+    // Future 8 Months
+    for (let m = 1; m <= 8; m++) {
+      const d = new Date(today);
+      d.setMonth(today.getMonth() + m);
+      const ymKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const isCurYear = d.getFullYear() === today.getFullYear();
+      const mLabel = isCurYear
+        ? d.toLocaleDateString('en-US', { month: 'long' })
+        : d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      const mList = futureMonthsItems[ymKey] ? futureMonthsItems[ymKey].list : [];
+      renderSection(mLabel, mList);
+    }
+  }
+
+  function createReminderRowElement(item) {
+    const row = document.createElement('div');
+    row.className = `rem-item-row ${item.completed ? 'is-completed' : ''}`;
+
+    let prioBadge = '';
+    if (item.priority === 'HIGH') prioBadge = '<span class="rem-priority-badge">!!!</span>';
+    else if (item.priority === 'MEDIUM') prioBadge = '<span class="rem-priority-badge">!!</span>';
+    else if (item.priority === 'LOW') prioBadge = '<span class="rem-priority-badge">!</span>';
+
+    const flagBadge = item.flagged ? '<span>🚩</span>' : '';
+    const subjectPill = item.subject ? `<span class="rem-subject-pill">${escapeHtml(item.subject)}</span>` : '';
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    let dueStr = item.dueDate || '';
+    if (dueStr === todayStr) dueStr = 'Today';
+
+    let timeStr = item.dueTime ? `at ${item.dueTime}` : '';
+    const timeDisplay = dueStr ? `<span>📅 ${dueStr} ${timeStr}</span>` : '';
+
+    row.innerHTML = `
+      <button class="rem-circle-check ${item.completed ? 'completed' : ''}" title="Toggle complete">
+        ${item.completed ? '✓' : ''}
+      </button>
+      <div class="rem-item-content">
+        <div class="rem-item-title-row">
+          <span class="rem-item-title">${escapeHtml(item.title)}</span>
+          ${prioBadge}
+          ${flagBadge}
+        </div>
+        <div class="rem-item-meta">
+          ${subjectPill}
+          ${timeDisplay}
+        </div>
+        ${item.notes ? `<div class="rem-item-notes">📝 ${escapeHtml(item.notes)}</div>` : ''}
+      </div>
+      <div class="rem-actions-bar">
+        <button class="rem-icon-btn btn-flag" title="Flag">${item.flagged ? '🚩' : '🏳️'}</button>
+        <button class="rem-icon-btn btn-edit" title="Edit">✏️</button>
+        <button class="rem-icon-btn btn-del" title="Delete">🗑️</button>
+      </div>
+    `;
+
+    // Event Listeners
+    row.querySelector('.rem-circle-check').addEventListener('click', () => toggleReminderCompleted(item));
+    row.querySelector('.btn-flag').addEventListener('click', () => toggleReminderFlag(item));
+    row.querySelector('.btn-edit').addEventListener('click', () => openReminderModal(item));
+    row.querySelector('.btn-del').addEventListener('click', () => deleteReminder(item));
+
+    return row;
+  }
+
+  async function toggleReminderCompleted(item) {
+    try {
+      const res = await fetch('/api/reminders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, completed: String(!item.completed) })
+      });
+      if (res.ok) {
+        item.completed = !item.completed;
+        updateReminderBadges();
+        renderRemindersList();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function toggleReminderFlag(item) {
+    try {
+      const res = await fetch('/api/reminders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, flagged: String(!item.flagged) })
+      });
+      if (res.ok) {
+        item.flagged = !item.flagged;
+        updateReminderBadges();
+        renderRemindersList();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function deleteReminder(item) {
+    if (!confirm(`Delete reminder "${item.title}"?`)) return;
+    try {
+      const res = await fetch(`/api/reminders?id=${encodeURIComponent(item.id)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        remindersData = remindersData.filter(r => r.id !== item.id);
+        updateReminderBadges();
+        renderRemindersList();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function openReminderModal(existing) {
+    editingReminderId = existing ? existing.id : null;
+    const modal = document.getElementById('reminderModal');
+    const modalTitle = document.getElementById('reminderModalTitle');
+    const titleInp = document.getElementById('remModalTitleInput');
+    const notesInp = document.getElementById('remModalNotesInput');
+    const subjectSel = document.getElementById('remModalSubjectSelect');
+    const dateInp = document.getElementById('remModalDateInput');
+    const timeInp = document.getElementById('remModalTimeInput');
+    const prioSel = document.getElementById('remModalPrioritySelect');
+    const flagInp = document.getElementById('remModalFlaggedInput');
+
+    // Populate Subjects
+    subjectSel.innerHTML = '';
+    const defOption = document.createElement('option');
+    defOption.value = 'General';
+    defOption.textContent = 'General';
+    subjectSel.appendChild(defOption);
+    subjectsData.forEach(sub => {
+      if (sub !== 'General') {
+        const opt = document.createElement('option');
+        opt.value = sub;
+        opt.textContent = sub;
+        subjectSel.appendChild(opt);
+      }
+    });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (existing) {
+      modalTitle.textContent = 'Edit Reminder';
+      titleInp.value = existing.title || '';
+      notesInp.value = existing.notes || '';
+      subjectSel.value = existing.subject || 'General';
+      dateInp.value = existing.dueDate || todayStr;
+      timeInp.value = existing.dueTime || '09:00';
+      prioSel.value = existing.priority || 'NONE';
+      flagInp.checked = Boolean(existing.flagged);
+    } else {
+      modalTitle.textContent = 'New Reminder';
+      titleInp.value = '';
+      notesInp.value = '';
+      subjectSel.value = 'General';
+      dateInp.value = todayStr;
+      timeInp.value = '09:00';
+      prioSel.value = 'NONE';
+      flagInp.checked = false;
+    }
+
+    modal.classList.remove('hidden');
+    titleInp.focus();
+  }
+
+  function derivePeriodFromTime(timeStr) {
+    if (!timeStr) return 'ALL_DAY';
+    const clean = timeStr.trim().toLowerCase();
+    let hour = 9;
+    const match = clean.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);
+    if (match) {
+      hour = parseInt(match[1], 10);
+      const isPm = match[3] === 'pm';
+      const isAm = match[3] === 'am';
+      if (isPm && hour < 12) hour += 12;
+      if (isAm && hour === 12) hour = 0;
+    } else {
+      const parts = clean.split(':');
+      if (parts.length > 0) hour = parseInt(parts[0], 10) || 9;
+    }
+    if (hour >= 5 && hour < 12) return 'MORNING';
+    if (hour >= 12 && hour < 17) return 'AFTERNOON';
+    if (hour >= 17 && hour < 21) return 'EVENING';
+    return 'NIGHT';
+  }
+
+  async function saveReminderFromModal() {
+    const titleInp = document.getElementById('remModalTitleInput');
+    const notesInp = document.getElementById('remModalNotesInput');
+    const subjectSel = document.getElementById('remModalSubjectSelect');
+    const dateInp = document.getElementById('remModalDateInput');
+    const timeInp = document.getElementById('remModalTimeInput');
+    const prioSel = document.getElementById('remModalPrioritySelect');
+    const flagInp = document.getElementById('remModalFlaggedInput');
+
+    const title = titleInp.value.trim();
+    if (!title) {
+      alert('Please enter a reminder title');
+      return;
+    }
+
+    const timeVal = timeInp.value || '09:00';
+    const payload = {
+      title,
+      notes: notesInp.value.trim(),
+      subject: subjectSel.value,
+      dueDate: dateInp.value,
+      dueTime: timeVal,
+      period: derivePeriodFromTime(timeVal),
+      priority: prioSel.value,
+      flagged: String(flagInp.checked)
+    };
+
+    try {
+      if (editingReminderId) {
+        payload.id = editingReminderId;
+        const res = await fetch('/api/reminders', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          await loadReminders();
+          document.getElementById('reminderModal').classList.add('hidden');
+        }
+      } else {
+        const res = await fetch('/api/reminders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          await loadReminders();
+          document.getElementById('reminderModal').classList.add('hidden');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error saving reminder');
+    }
   }
 
 })();

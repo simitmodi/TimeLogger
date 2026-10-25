@@ -18,12 +18,14 @@ public class StorageService {
     private final Path subjectsFile;
     private final Path sessionsFile;
     private final Path activeSessionFile;
+    private final Path remindersFile;
 
     public StorageService() {
         this.appDirectory = Paths.get(System.getProperty("user.dir"));
         this.subjectsFile = appDirectory.resolve("subjects.txt");
         this.sessionsFile = appDirectory.resolve("sessions.log");
         this.activeSessionFile = appDirectory.resolve("active_session.state");
+        this.remindersFile = appDirectory.resolve("reminders.json");
         initialize();
     }
 
@@ -679,5 +681,222 @@ public class StorageService {
             return a.compareToIgnoreCase(b);
         });
         return sorted;
+    }
+
+    public synchronized List<ReminderItem> loadReminders() {
+        List<ReminderItem> list = new ArrayList<>();
+        if (!Files.exists(remindersFile)) {
+            return list;
+        }
+
+        try {
+            String content = Files.readString(remindersFile, StandardCharsets.UTF_8).trim();
+            if (content.isEmpty() || !content.startsWith("[") || !content.endsWith("]")) {
+                return list;
+            }
+
+            // Remove outer brackets
+            String inner = content.substring(1, content.length() - 1).trim();
+            if (inner.isEmpty()) {
+                return list;
+            }
+
+            // Parse simple JSON objects
+            List<String> objects = splitJsonObjects(inner);
+            for (String objJson : objects) {
+                ReminderItem item = parseReminderJson(objJson);
+                if (item != null) {
+                    list.add(item);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error reading reminders: " + e.getMessage());
+        }
+        return list;
+    }
+
+    public synchronized void saveReminders(List<ReminderItem> reminders) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[\n");
+        for (int i = 0; i < reminders.size(); i++) {
+            ReminderItem item = reminders.get(i);
+            sb.append("  ").append(serializeReminderJson(item));
+            if (i < reminders.size() - 1) {
+                sb.append(",");
+            }
+            sb.append("\n");
+        }
+        sb.append("]");
+
+        try {
+            Files.writeString(remindersFile, sb.toString(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save reminders", e);
+        }
+    }
+
+    private List<String> splitJsonObjects(String json) {
+        List<String> list = new ArrayList<>();
+        int depth = 0;
+        int start = -1;
+        boolean inQuotes = false;
+        boolean escape = false;
+
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (c == '\\') {
+                escape = true;
+                continue;
+            }
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (!inQuotes) {
+                if (c == '{') {
+                    if (depth == 0) start = i;
+                    depth++;
+                } else if (c == '}') {
+                    depth--;
+                    if (depth == 0 && start != -1) {
+                        list.add(json.substring(start, i + 1));
+                        start = -1;
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    private ReminderItem parseReminderJson(String json) {
+        try {
+            ReminderItem item = new ReminderItem();
+            java.util.Map<String, String> map = new java.util.HashMap<>();
+            // Extract key-value pairs
+            int len = json.length();
+            int i = 0;
+            while (i < len) {
+                int keyStart = json.indexOf('"', i);
+                if (keyStart == -1) break;
+                int keyEnd = json.indexOf('"', keyStart + 1);
+                if (keyEnd == -1) break;
+                String key = json.substring(keyStart + 1, keyEnd);
+                
+                int colon = json.indexOf(':', keyEnd + 1);
+                if (colon == -1) break;
+                
+                // Find start of value
+                int valStart = colon + 1;
+                while (valStart < len && Character.isWhitespace(json.charAt(valStart))) valStart++;
+                if (valStart >= len) break;
+                
+                String val;
+                if (json.charAt(valStart) == '"') {
+                    StringBuilder valBuf = new StringBuilder();
+                    int cur = valStart + 1;
+                    boolean esc = false;
+                    while (cur < len) {
+                        char c = json.charAt(cur);
+                        if (esc) {
+                            if (c == 'n') valBuf.append('\n');
+                            else if (c == 't') valBuf.append('\t');
+                            else if (c == 'r') valBuf.append('\r');
+                            else valBuf.append(c);
+                            esc = false;
+                        } else if (c == '\\') {
+                            esc = true;
+                        } else if (c == '"') {
+                            break;
+                        } else {
+                            valBuf.append(c);
+                        }
+                        cur++;
+                    }
+                    val = valBuf.toString();
+                    i = cur + 1;
+                } else {
+                    int valEnd = valStart;
+                    while (valEnd < len && json.charAt(valEnd) != ',' && json.charAt(valEnd) != '}') {
+                        valEnd++;
+                    }
+                    val = json.substring(valStart, valEnd).trim();
+                    i = valEnd;
+                }
+                map.put(key, val);
+            }
+
+            if (map.containsKey("id")) item.setId(map.get("id"));
+            if (map.containsKey("title")) item.setTitle(map.get("title"));
+            if (map.containsKey("notes")) item.setNotes(map.get("notes"));
+            if (map.containsKey("dueDate") && !map.get("dueDate").isEmpty() && !"null".equalsIgnoreCase(map.get("dueDate"))) {
+                item.setDueDate(java.time.LocalDate.parse(map.get("dueDate")));
+            }
+            if (map.containsKey("dueTime") && !map.get("dueTime").isEmpty() && !"null".equalsIgnoreCase(map.get("dueTime"))) {
+                item.setDueTime(java.time.LocalTime.parse(map.get("dueTime")));
+            }
+            if (map.containsKey("period")) {
+                item.setPeriod(ReminderItem.TimePeriod.fromString(map.get("period")));
+            }
+            if (map.containsKey("subject")) {
+                item.setSubject(map.get("subject"));
+            }
+            if (map.containsKey("priority")) {
+                item.setPriority(ReminderItem.Priority.fromString(map.get("priority")));
+            }
+            if (map.containsKey("flagged")) {
+                item.setFlagged(Boolean.parseBoolean(map.get("flagged")));
+            }
+            if (map.containsKey("completed")) {
+                item.setCompleted(Boolean.parseBoolean(map.get("completed")));
+            }
+            if (map.containsKey("completedAt") && !map.get("completedAt").isEmpty() && !"null".equalsIgnoreCase(map.get("completedAt"))) {
+                item.setCompletedAt(java.time.LocalDateTime.parse(map.get("completedAt")));
+            }
+            if (map.containsKey("createdAt") && !map.get("createdAt").isEmpty() && !"null".equalsIgnoreCase(map.get("createdAt"))) {
+                item.setCreatedAt(java.time.LocalDateTime.parse(map.get("createdAt")));
+            }
+            if (map.containsKey("notified")) {
+                item.setNotified(Boolean.parseBoolean(map.get("notified")));
+            }
+
+            return item;
+        } catch (Exception e) {
+            System.err.println("Error parsing reminder JSON: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String serializeReminderJson(ReminderItem item) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append("\"id\":\"").append(escapeJson(item.getId())).append("\",");
+        sb.append("\"title\":\"").append(escapeJson(item.getTitle())).append("\",");
+        sb.append("\"notes\":\"").append(escapeJson(item.getNotes())).append("\",");
+        sb.append("\"dueDate\":").append(item.getDueDate() == null ? "null" : "\"" + item.getDueDate() + "\"").append(",");
+        sb.append("\"dueTime\":").append(item.getDueTime() == null ? "null" : "\"" + item.getDueTime() + "\"").append(",");
+        sb.append("\"period\":\"").append(item.getPeriod() == null ? "ALL_DAY" : item.getPeriod().name()).append("\",");
+        sb.append("\"subject\":\"").append(escapeJson(item.getSubject())).append("\",");
+        sb.append("\"priority\":\"").append(item.getPriority() == null ? "NONE" : item.getPriority().name()).append("\",");
+        sb.append("\"flagged\":").append(item.isFlagged()).append(",");
+        sb.append("\"completed\":").append(item.isCompleted()).append(",");
+        sb.append("\"completedAt\":").append(item.getCompletedAt() == null ? "null" : "\"" + item.getCompletedAt() + "\"").append(",");
+        sb.append("\"createdAt\":").append(item.getCreatedAt() == null ? "null" : "\"" + item.getCreatedAt() + "\"").append(",");
+        sb.append("\"notified\":").append(item.isNotified());
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 }

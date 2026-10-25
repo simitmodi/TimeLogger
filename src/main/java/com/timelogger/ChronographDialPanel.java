@@ -32,11 +32,35 @@ public class ChronographDialPanel extends JPanel {
     private Color chronoHandColor = new Color(242, 100, 25); // Apple stopwatch energetic orange
     private Color subdialHandColor = new Color(0, 122, 255); // Clean precision blue
     private Color digitalWindowBg = new Color(240, 242, 246);
+    private Color hourHandColor = new Color(40, 44, 52);
+    private Color minuteHandColor = new Color(55, 60, 70);
+    private Color handLumeColor = new Color(245, 248, 252);
+    private final javax.swing.Timer clockRefreshTimer;
 
     public ChronographDialPanel() {
         setOpaque(false);
         setPreferredSize(new Dimension(340, 340));
         setMinimumSize(new Dimension(240, 240));
+
+        // Periodic timer so current time hands advance even when stopwatch is stopped
+        clockRefreshTimer = new javax.swing.Timer(1000, e -> repaint());
+        clockRefreshTimer.start();
+    }
+
+    @Override
+    public void removeNotify() {
+        super.removeNotify();
+        if (clockRefreshTimer != null && clockRefreshTimer.isRunning()) {
+            clockRefreshTimer.stop();
+        }
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (clockRefreshTimer != null && !clockRefreshTimer.isRunning()) {
+            clockRefreshTimer.start();
+        }
     }
 
     public void setElapsedMillis(long millis) {
@@ -56,6 +80,9 @@ public class ChronographDialPanel extends JPanel {
             this.chronoHandColor = new Color(255, 110, 35);
             this.subdialHandColor = new Color(96, 205, 255);
             this.digitalWindowBg = new Color(38, 42, 48);
+            this.hourHandColor = new Color(220, 225, 235);
+            this.minuteHandColor = new Color(200, 208, 220);
+            this.handLumeColor = new Color(35, 40, 48);
         } else {
             this.dialBg = new Color(252, 253, 255);
             this.dialBorder = new Color(216, 220, 228);
@@ -65,6 +92,9 @@ public class ChronographDialPanel extends JPanel {
             this.chronoHandColor = new Color(235, 87, 20);
             this.subdialHandColor = new Color(0, 102, 204);
             this.digitalWindowBg = new Color(240, 243, 247);
+            this.hourHandColor = new Color(42, 46, 54);
+            this.minuteHandColor = new Color(65, 70, 80);
+            this.handLumeColor = new Color(248, 250, 255);
         }
         repaint();
     }
@@ -166,7 +196,10 @@ public class ChronographDialPanel extends JPanel {
         // 4. Digital Elapsed Readout Box below center
         drawDigitalWindow(g2, cx, cy + radius * 0.44, radius * 0.65, radius * 0.20);
 
-        // 5. Main Chronograph Sweeping Seconds Hand
+        // 5. Real-Time Clock Hands (Hour & Minute hands beneath the chronograph needle)
+        drawCurrentTimeHands(g2, cx, cy, radius);
+
+        // 6. Main Chronograph Sweeping Seconds Hand (Top layer)
         drawChronoSecondsHand(g2, cx, cy, radius * 0.94);
 
         // Center pinion cap / jewel
@@ -176,6 +209,70 @@ public class ChronographDialPanel extends JPanel {
         g2.fill(new Ellipse2D.Double(cx - 3, cy - 3, 6, 6));
 
         g2.dispose();
+    }
+
+    private void drawCurrentTimeHands(Graphics2D g2, double cx, double cy, double dialRadius) {
+        java.time.LocalTime now = java.time.LocalTime.now();
+        int hour = now.getHour() % 12;
+        int minute = now.getMinute();
+        int second = now.getSecond();
+
+        // Exact fractional angles for realistic watch mechanical motion
+        double hourAngleRad = Math.toRadians(((hour + minute / 60.0 + second / 3600.0) / 12.0) * 360.0 - 90.0);
+        double minuteAngleRad = Math.toRadians(((minute + second / 60.0) / 60.0) * 360.0 - 90.0);
+
+        // A. Real-time Hour Hand (Baton style with lume strip)
+        double hourHandLen = dialRadius * 0.52;
+        double hourHandHalfW = Math.max(2.2, dialRadius * 0.024);
+        drawBatonHand(g2, cx, cy, hourAngleRad, hourHandLen, dialRadius * 0.12, hourHandHalfW, hourHandColor, handLumeColor);
+
+        // B. Real-time Minute Hand (Longer, slender baton extending towards outer track)
+        double minHandLen = dialRadius * 0.76;
+        double minHandHalfW = Math.max(1.8, dialRadius * 0.018);
+        drawBatonHand(g2, cx, cy, minuteAngleRad, minHandLen, dialRadius * 0.12, minHandHalfW, minuteHandColor, handLumeColor);
+    }
+
+    private void drawBatonHand(Graphics2D g2, double cx, double cy, double angleRad, double length, double tailLen, double halfW, Color bodyColor, Color lumeColor) {
+        AffineTransform old = g2.getTransform();
+        g2.translate(cx, cy);
+        g2.rotate(angleRad + Math.PI / 2.0); // 0 degrees pointing up (-Y direction)
+
+        // Hand polygon: tapered tip with counterweight tail
+        java.awt.geom.Path2D.Double handPath = new java.awt.geom.Path2D.Double();
+        handPath.moveTo(-halfW, tailLen);
+        handPath.lineTo(halfW, tailLen);
+        handPath.lineTo(halfW * 0.9, -length + halfW * 2.0);
+        handPath.lineTo(0, -length);
+        handPath.lineTo(-halfW * 0.9, -length + halfW * 2.0);
+        handPath.closePath();
+
+        // Drop shadow for depth under the hands
+        g2.setColor(new Color(0, 0, 0, 35));
+        AffineTransform shadowT = new AffineTransform();
+        shadowT.translate(1.2, 1.8);
+        java.awt.Shape shadowShape = shadowT.createTransformedShape(handPath);
+        g2.fill(shadowShape);
+
+        // Hand body
+        g2.setColor(bodyColor);
+        g2.fill(handPath);
+        g2.setColor(new Color(bodyColor.getRed(), bodyColor.getGreen(), bodyColor.getBlue(), 120));
+        g2.setStroke(new BasicStroke(0.8f));
+        g2.draw(handPath);
+
+        // Luminous / contrasting central inlay strip
+        double lumeW = Math.max(1.0, halfW * 0.45);
+        double lumeStart = -tailLen * 0.2;
+        double lumeEnd = -length + halfW * 3.0;
+        if (lumeEnd < lumeStart) {
+            java.awt.geom.RoundRectangle2D.Double lumeStrip = new java.awt.geom.RoundRectangle2D.Double(
+                -lumeW / 2.0, lumeEnd, lumeW, (lumeStart - lumeEnd), 1.5, 1.5
+            );
+            g2.setColor(lumeColor);
+            g2.fill(lumeStrip);
+        }
+
+        g2.setTransform(old);
     }
 
     private void draw60MinuteSubdial(Graphics2D g2, double scx, double scy, double sradius) {

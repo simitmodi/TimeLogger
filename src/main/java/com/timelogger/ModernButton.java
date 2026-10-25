@@ -22,6 +22,7 @@ public class ModernButton extends JButton {
         STANDARD,
         PRIMARY,
         SUCCESS,
+        WARNING,
         DANGER,
         OUTLINE
     }
@@ -124,6 +125,11 @@ public class ModernButton extends JButton {
                 break;
             case SUCCESS:
                 bg = isDark ? new Color(16, 137, 62) : new Color(16, 124, 65);
+                fg = Color.WHITE;
+                border = bg;
+                break;
+            case WARNING:
+                bg = isDark ? new Color(210, 153, 34) : new Color(224, 138, 0);
                 fg = Color.WHITE;
                 border = bg;
                 break;
