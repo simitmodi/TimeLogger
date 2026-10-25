@@ -50,6 +50,7 @@ public class WebServer {
         server.createContext("/api/status", new StatusHandler());
         server.createContext("/api/subjects", new SubjectsHandler());
         server.createContext("/api/question-topics", new QuestionTopicsHandler());
+        server.createContext("/api/revision-topics", new RevisionTopicsHandler());
         server.createContext("/api/sessions", new SessionsHandler());
         server.createContext("/api/active-session", new ActiveSessionHandler());
         server.createContext("/api/goal", new GoalHandler());
@@ -238,6 +239,52 @@ public class WebServer {
                         storageService.saveQuestionTopics(qType, subject, topics);
                     }
                     storageService.saveLastQuestionDesc(qType, subject, topic);
+                    sendJson(exchange, 200, "{\"success\":true}");
+                } else {
+                    sendJson(exchange, 400, "{\"error\":\"Missing required parameters\"}");
+                }
+            } else {
+                sendResponse(exchange, 405, "text/plain", "Method Not Allowed");
+            }
+        }
+    }
+
+    // --- Revision Topics Handler ---
+    private class RevisionTopicsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                handleCors(exchange);
+                return;
+            }
+            String method = exchange.getRequestMethod().toUpperCase();
+            if ("GET".equals(method)) {
+                String query = exchange.getRequestURI().getQuery();
+                Map<String, String> params = parseQueryParams(query);
+                String subject = params.getOrDefault("subject", "");
+                List<String> topics = storageService.loadRevisionTopics(subject);
+                String lastTopic = storageService.loadLastRevisionTopic(subject);
+
+                StringBuilder json = new StringBuilder("{\"topics\":[");
+                for (int i = 0; i < topics.size(); i++) {
+                    json.append("\"").append(escapeJson(topics.get(i))).append("\"");
+                    if (i < topics.size() - 1) json.append(",");
+                }
+                json.append("],\"lastTopic\":\"").append(escapeJson(lastTopic)).append("\"}");
+                sendJson(exchange, 200, json.toString());
+            } else if ("POST".equals(method)) {
+                String body = readBody(exchange);
+                Map<String, String> data = parseJsonSimple(body);
+                String subject = data.get("subject");
+                String topic = data.get("topic");
+                if (subject != null && topic != null && !topic.trim().isEmpty()) {
+                    topic = topic.trim();
+                    List<String> topics = new ArrayList<>(storageService.loadRevisionTopics(subject));
+                    if (!topics.contains(topic)) {
+                        topics.add(topic);
+                        storageService.saveRevisionTopics(subject, topics);
+                    }
+                    storageService.saveLastRevisionTopic(subject, topic);
                     sendJson(exchange, 200, "{\"success\":true}");
                 } else {
                     sendJson(exchange, 400, "{\"error\":\"Missing required parameters\"}");

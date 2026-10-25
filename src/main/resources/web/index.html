@@ -108,7 +108,7 @@
 
           <div class="form-group hidden" id="swRevisionGroup">
             <label>Revision Topic</label>
-            <input type="text" id="swRevisionTopic" placeholder="Topic name..." class="styled-input">
+            <select id="swRevisionTopic" class="styled-select"></select>
           </div>
         </div>
 
@@ -344,9 +344,14 @@
 
         <!-- Revision by Topic (Filtered) -->
         <div class="card">
-          <div class="card-header-row">
+          <div class="card-header-row" style="flex-wrap: wrap; gap: 8px;">
             <h3>Revision by Topic</h3>
-            <span class="table-hint">Double-click row to view sessions</span>
+            <div style="display: flex; gap: 16px; align-items: center; margin-left: auto;">
+              <div class="filter-group-inline">
+                <label>Subject:</label>
+                <select id="analysisRevisionSubjectFilter" class="styled-select mini-select"></select>
+              </div>
+            </div>
           </div>
           <div class="table-container">
             <table class="data-table interactive-table" id="revisionAnalysisTable">

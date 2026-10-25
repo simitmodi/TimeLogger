@@ -130,7 +130,7 @@ public class AppFrame extends JFrame {
     private ModernCardPanel stopwatchCard;
     final JTextField stopwatchChapterField = new JTextField(5);
     final JTextField stopwatchLectureField = new JTextField(5);
-    final JTextField stopwatchRevisionTopicField = new JTextField(20);
+    final JComboBox<String> stopwatchRevisionTopicCombo = new JComboBox<>();
     private final ModernButton stopwatchStartButton = new ModernButton("Start", ModernButton.ButtonStyle.PRIMARY);
     private final ModernButton stopwatchPauseResumeButton = new ModernButton("Pause", ModernButton.ButtonStyle.WARNING);
     private final ModernButton stopwatchStopButton = new ModernButton("Stop & Log", ModernButton.ButtonStyle.SUCCESS);
@@ -247,6 +247,7 @@ public class AppFrame extends JFrame {
     private JComboBox<String> questionsTopicFilterCombo;
     private JComboBox<String> questionsSubjectFilterCombo;
     private JComboBox<String> activitySubjectFilterCombo;
+    private JComboBox<String> revisionSubjectFilterCombo;
     private ScientificCalculator scientificCalculator;
     private final JLabel avgSessionLabel = new JLabel("Avg Duration: -", SwingConstants.CENTER);
     private final JLabel activeDayAvgLabel = new JLabel("Active Day Avg: -", SwingConstants.CENTER);
@@ -316,6 +317,12 @@ public class AppFrame extends JFrame {
             if (subject == null) subject = "";
             String lastDesc = storageService.loadLastQuestionDesc(initialQType, subject);
             selectOrAddQuestionDesc(lastDesc);
+        }
+        refreshRevisionTopicsDropdown();
+        String initialSubject = (String) stopwatchSubjectCombo.getSelectedItem();
+        if (initialSubject != null) {
+            String lastRev = storageService.loadLastRevisionTopic(initialSubject);
+            selectOrAddRevisionTopic(lastRev);
         }
         refreshTimerSubjects();
         refreshLogsSubjects();
@@ -426,7 +433,7 @@ public class AppFrame extends JFrame {
                 int width = 150;
                 FontMetrics fm = child.getFontMetrics(controlFont);
 
-                if (child == stopwatchActivityField || child == stopwatchRevisionTopicField) {
+                if (child == stopwatchActivityField) {
                     // Contracts for small text and expands dynamically with content
                     JTextField tf = (JTextField) child;
                     String text = tf.getText();
@@ -437,7 +444,7 @@ public class AppFrame extends JFrame {
                     Object sel = cb.getSelectedItem();
                     int selWidth = (sel != null) ? fm.stringWidth(sel.toString()) : 70;
                     width = Math.max(100, selWidth + 48);
-                } else if (child == stopwatchQuestionDescCombo) {
+                } else if (child == stopwatchQuestionDescCombo || child == stopwatchRevisionTopicCombo) {
                     JComboBox<?> cb = (JComboBox<?>) child;
                     Object sel = cb.getSelectedItem();
                     int textWidth = (sel != null) ? fm.stringWidth(sel.toString()) : 60;
@@ -628,7 +635,7 @@ public class AppFrame extends JFrame {
         stopwatchQuestionTypeCombo.setPreferredSize(new Dimension(200, 28));
         stopwatchChapterField.setPreferredSize(new Dimension(50, 28));
         stopwatchLectureField.setPreferredSize(new Dimension(50, 28));
-        stopwatchRevisionTopicField.setPreferredSize(new Dimension(300, 28));
+        stopwatchRevisionTopicCombo.setPreferredSize(new Dimension(300, 28));
 
         this.stopwatchCard = new ModernCardPanel(14);
         ModernCardPanel card = this.stopwatchCard;
@@ -743,28 +750,39 @@ public class AppFrame extends JFrame {
             }
         });
 
-        stopwatchRevisionTopicField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            @Override
-            public void insertUpdate(javax.swing.event.DocumentEvent e) {
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    AppFrame.this.updateTimeLabelsFontSize();
-                    AppFrame.this.updateStopwatchSessionDetails();
-                });
+        final String[] lastSelectedRevisionTopic = {null};
+        stopwatchRevisionTopicCombo.addActionListener(e -> {
+            String selected = (String) stopwatchRevisionTopicCombo.getSelectedItem();
+            if ("[Add Custom...]".equals(selected)) {
+                String input = JOptionPane.showInputDialog(this, "Enter custom revision topic name:", "New Topic", JOptionPane.PLAIN_MESSAGE);
+                if (input != null) {
+                    input = input.trim();
+                    if (!input.isEmpty() && !"[Add Custom...]".equals(input)) {
+                        boolean exists = false;
+                        for (int i = 0; i < stopwatchRevisionTopicCombo.getItemCount(); i++) {
+                            if (input.equalsIgnoreCase(stopwatchRevisionTopicCombo.getItemAt(i))) {
+                                stopwatchRevisionTopicCombo.setSelectedIndex(i);
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            int count = stopwatchRevisionTopicCombo.getItemCount();
+                            stopwatchRevisionTopicCombo.insertItemAt(input, count - 1);
+                            stopwatchRevisionTopicCombo.setSelectedItem(input);
+                            saveCurrentRevisionTopics();
+                        }
+                    } else {
+                        revertRevisionTopicSelection(lastSelectedRevisionTopic[0]);
+                    }
+                } else {
+                    revertRevisionTopicSelection(lastSelectedRevisionTopic[0]);
+                }
+            } else {
+                lastSelectedRevisionTopic[0] = selected;
             }
-            @Override
-            public void removeUpdate(javax.swing.event.DocumentEvent e) {
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    AppFrame.this.updateTimeLabelsFontSize();
-                    AppFrame.this.updateStopwatchSessionDetails();
-                });
-            }
-            @Override
-            public void changedUpdate(javax.swing.event.DocumentEvent e) {
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    AppFrame.this.updateTimeLabelsFontSize();
-                    AppFrame.this.updateStopwatchSessionDetails();
-                });
-            }
+            updateTimeLabelsFontSize();
+            updateStopwatchSessionDetails();
         });
 
         javax.swing.event.DocumentListener lecChListener = new javax.swing.event.DocumentListener() {
@@ -824,7 +842,7 @@ public class AppFrame extends JFrame {
         JLabel revLabel = new JLabel("Topic:");
         revLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
         revisionCard.add(revLabel);
-        revisionCard.add(stopwatchRevisionTopicField);
+        revisionCard.add(stopwatchRevisionTopicCombo);
 
         stopwatchActivitySubPanel.add(generalCard, "General");
         stopwatchActivitySubPanel.add(questionsCard, "Questions");
@@ -900,6 +918,12 @@ public class AppFrame extends JFrame {
                 if (subject == null) subject = "";
                 String lastDesc = storageService.loadLastQuestionDesc(qType, subject);
                 selectOrAddQuestionDesc(lastDesc);
+            }
+            refreshRevisionTopicsDropdown();
+            String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+            if (subject != null) {
+                String lastRev = storageService.loadLastRevisionTopic(subject);
+                selectOrAddRevisionTopic(lastRev);
             }
             updateTimeLabelsFontSize();
             updateStopwatchSessionDetails();
@@ -1290,7 +1314,7 @@ public class AppFrame extends JFrame {
                     } else if (desc.startsWith("Revision: ")) {
                         stopwatchActivityTypeCombo.setSelectedItem("Revision");
                         String topic = desc.substring("Revision: ".length()).trim();
-                        stopwatchRevisionTopicField.setText(topic);
+                        selectOrAddRevisionTopic(topic);
                     } else {
                         stopwatchActivityTypeCombo.setSelectedItem("General");
                         stopwatchActivityField.setText(desc);
@@ -1546,6 +1570,19 @@ public class AppFrame extends JFrame {
         revisionTable.setRowHeight(24);
         JPanel revisionCard = new JPanel(new BorderLayout(8, 8));
         revisionCard.setBorder(BorderFactory.createTitledBorder("Revision by Topic"));
+        
+        JPanel revisionFilterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        revisionFilterPanel.setOpaque(false);
+        JLabel revSubLbl = new JLabel("Subject:");
+        revSubLbl.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        
+        revisionSubjectFilterCombo = new JComboBox<>();
+        revisionSubjectFilterCombo.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        revisionSubjectFilterCombo.addActionListener(e -> refreshAnalysis());
+        revisionFilterPanel.add(revSubLbl);
+        revisionFilterPanel.add(revisionSubjectFilterCombo);
+        revisionCard.add(revisionFilterPanel, BorderLayout.NORTH);
+
         JScrollPane revisionScroll = new JScrollPane(revisionTable);
         revisionScroll.setPreferredSize(new Dimension(200, 140));
         revisionCard.add(revisionScroll, BorderLayout.CENTER);
@@ -1790,12 +1827,12 @@ public class AppFrame extends JFrame {
 
         addTableDoubleClickListener(revisionTable, row -> {
             String topicName = (String) revisionAnalysisModel.getValueAt(row, 0);
-            String activitySubjectFilter = "All Subjects";
-            if (activitySubjectFilterCombo != null) {
-                activitySubjectFilter = (String) activitySubjectFilterCombo.getSelectedItem();
-                if (activitySubjectFilter == null) activitySubjectFilter = "All Subjects";
+            String revisionSubjectFilter = "All Subjects";
+            if (revisionSubjectFilterCombo != null) {
+                revisionSubjectFilter = (String) revisionSubjectFilterCombo.getSelectedItem();
+                if (revisionSubjectFilter == null) revisionSubjectFilter = "All Subjects";
             }
-            final String finalSub = activitySubjectFilter;
+            final String finalSub = revisionSubjectFilter;
             
             List<SessionRecord> periodSessions = getFilteredSessionsForPeriod((String) analysisPeriodCombo.getSelectedItem());
             List<SessionRecord> filtered = periodSessions.stream()
@@ -2324,10 +2361,17 @@ public class AppFrame extends JFrame {
             if (activitySubjectFilter == null) activitySubjectFilter = "All Subjects";
         }
 
+        String revisionSubjectFilter = "All Subjects";
+        if (revisionSubjectFilterCombo != null) {
+            revisionSubjectFilter = (String) revisionSubjectFilterCombo.getSelectedItem();
+            if (revisionSubjectFilter == null) revisionSubjectFilter = "All Subjects";
+        }
+
         for (SessionRecord session : sessions) {
             String desc = session.getDescription() != null ? session.getDescription() : "";
             long sec = session.getDurationSeconds();
             boolean matchesActivitySubject = "All Subjects".equals(activitySubjectFilter) || session.getSubject().equalsIgnoreCase(activitySubjectFilter);
+            boolean matchesRevisionSubject = "All Subjects".equals(revisionSubjectFilter) || session.getSubject().equalsIgnoreCase(revisionSubjectFilter);
 
             if (desc.startsWith("Questions: ")) {
                 String qType = desc.substring("Questions: ".length());
@@ -2378,10 +2422,12 @@ public class AppFrame extends JFrame {
                 }
             } else if (desc.startsWith("Revision: ")) {
                 if (matchesActivitySubject) {
+                    revisionSec += sec;
+                }
+                if (matchesRevisionSubject) {
                     String topic = desc.substring("Revision: ".length()).trim();
                     if (topic.isEmpty()) topic = "General/Unnamed";
                     byRevisionTopic.put(topic, byRevisionTopic.getOrDefault(topic, 0L) + sec);
-                    revisionSec += sec;
                 }
             } else if (!desc.startsWith("Lecture: ")) {
                 if (matchesActivitySubject) {
@@ -2683,7 +2729,8 @@ public class AppFrame extends JFrame {
             if (!ch.isEmpty()) detail += " • Ch " + ch;
             if (!lec.isEmpty()) detail += " • Lec " + lec;
         } else if ("Revision".equals(activityType)) {
-            String topic = stopwatchRevisionTopicField.getText().trim();
+            Object selectedObj = stopwatchRevisionTopicCombo.getSelectedItem();
+            String topic = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : selectedObj.toString().trim();
             detail = "Activity: Revision";
             if (!topic.isEmpty()) {
                 detail += " • " + topic;
@@ -2858,7 +2905,13 @@ public class AppFrame extends JFrame {
             String lec = stopwatchLectureField.getText().trim();
             activityDetail = "Lecture: Ch " + ch + ", Lec " + lec;
         } else if ("Revision".equals(activityType)) {
-            String topic = stopwatchRevisionTopicField.getText().trim();
+            Object selectedObj = stopwatchRevisionTopicCombo.getSelectedItem();
+            String topic = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : ((String) selectedObj).trim();
+            if (!topic.isEmpty()) {
+                String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+                if (subject == null) subject = "";
+                storageService.saveLastRevisionTopic(subject, topic);
+            }
             activityDetail = "Revision: " + topic;
         }
 
@@ -2949,7 +3002,7 @@ public class AppFrame extends JFrame {
         stopwatchChapterField.setText("");
         stopwatchLectureField.setText("");
         stopwatchQuestionDescCombo.setSelectedIndex(-1);
-        stopwatchRevisionTopicField.setText("");
+        stopwatchRevisionTopicCombo.setSelectedIndex(-1);
         stopwatchActivityTypeCombo.setSelectedIndex(0);
         stopwatchQuestionTypeCombo.setSelectedIndex(0);
         updateStopwatchButtons();
@@ -3022,7 +3075,7 @@ public class AppFrame extends JFrame {
         stopwatchQuestionDescCombo.setEnabled(!stopwatchStarted);
         stopwatchChapterField.setEnabled(!stopwatchStarted);
         stopwatchLectureField.setEnabled(!stopwatchStarted);
-        stopwatchRevisionTopicField.setEnabled(!stopwatchStarted);
+        stopwatchRevisionTopicCombo.setEnabled(!stopwatchStarted);
     }
 
     public void startTimer() {
@@ -3494,6 +3547,23 @@ public class AppFrame extends JFrame {
                 activitySubjectFilterCombo.setSelectedItem(previous);
             } else {
                 activitySubjectFilterCombo.setSelectedIndex(0);
+            }
+        }
+
+        if (revisionSubjectFilterCombo != null) {
+            String previous = (String) revisionSubjectFilterCombo.getSelectedItem();
+            DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+            model.addElement("All Subjects");
+            List<String> sorted = getSubjectsSortedByUsage();
+            for (String subject : sorted) {
+                model.addElement(subject);
+            }
+            revisionSubjectFilterCombo.setModel(model);
+
+            if (previous != null) {
+                revisionSubjectFilterCombo.setSelectedItem(previous);
+            } else {
+                revisionSubjectFilterCombo.setSelectedIndex(0);
             }
         }
     }
@@ -4357,7 +4427,8 @@ public class AppFrame extends JFrame {
                 String lec = stopwatchLectureField.getText().trim();
                 activityDetail = "Lecture: Ch " + ch + ", Lec " + lec;
             } else if ("Revision".equals(activityType)) {
-                String topic = stopwatchRevisionTopicField.getText().trim();
+                Object selectedObj = stopwatchRevisionTopicCombo.getSelectedItem();
+                String topic = (selectedObj == null || "[Add Custom...]".equals(selectedObj)) ? "" : ((String) selectedObj).trim();
                 activityDetail = "Revision: " + topic;
             }
 
@@ -4522,6 +4593,11 @@ public class AppFrame extends JFrame {
                     stopwatchActivityTypeCombo.setSelectedItem("Lecture");
                 } else if ("Revision".equals(state.getActivityType())) {
                     stopwatchActivityTypeCombo.setSelectedItem("Revision");
+                    String detail = state.getActivityDetail();
+                    if (detail != null && detail.startsWith("Revision: ")) {
+                        String rTopic = detail.substring("Revision: ".length()).trim();
+                        selectOrAddRevisionTopic(rTopic);
+                    }
                 } else {
                     stopwatchActivityTypeCombo.setSelectedItem("General");
                     stopwatchActivityField.setText(state.getActivityDetail());
@@ -6465,6 +6541,80 @@ public class AppFrame extends JFrame {
             } else {
                 stopwatchQuestionDescCombo.addItem(desc);
                 stopwatchQuestionDescCombo.setSelectedItem(desc);
+            }
+        }
+    }
+
+    private void refreshRevisionTopicsDropdown() {
+        String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+        if (subject == null) {
+            subject = "";
+        }
+        List<String> topics = storageService.loadRevisionTopics(subject);
+
+        // Remove selection listener temporarily to avoid trigger during model set
+        java.awt.event.ActionListener[] listeners = stopwatchRevisionTopicCombo.getActionListeners();
+        for (java.awt.event.ActionListener l : listeners) {
+            stopwatchRevisionTopicCombo.removeActionListener(l);
+        }
+
+        stopwatchRevisionTopicCombo.removeAllItems();
+        for (String topic : topics) {
+            stopwatchRevisionTopicCombo.addItem(topic);
+        }
+        stopwatchRevisionTopicCombo.addItem("[Add Custom...]");
+        stopwatchRevisionTopicCombo.setSelectedIndex(-1);
+
+        // Re-add selection listeners
+        for (java.awt.event.ActionListener l : listeners) {
+            stopwatchRevisionTopicCombo.addActionListener(l);
+        }
+    }
+
+    private void saveCurrentRevisionTopics() {
+        String subject = (String) stopwatchSubjectCombo.getSelectedItem();
+        if (subject == null) return;
+        List<String> topics = new ArrayList<>();
+        for (int i = 0; i < stopwatchRevisionTopicCombo.getItemCount(); i++) {
+            String item = stopwatchRevisionTopicCombo.getItemAt(i);
+            if (item != null && !"[Add Custom...]".equals(item)) {
+                topics.add(item);
+            }
+        }
+        storageService.saveRevisionTopics(subject, topics);
+    }
+
+    private void revertRevisionTopicSelection(String val) {
+        if (val == null) {
+            stopwatchRevisionTopicCombo.setSelectedIndex(-1);
+        } else {
+            stopwatchRevisionTopicCombo.setSelectedItem(val);
+        }
+    }
+
+    public void selectOrAddRevisionTopic(String topic) {
+        if (topic == null || topic.trim().isEmpty()) {
+            stopwatchRevisionTopicCombo.setSelectedIndex(-1);
+            return;
+        }
+        topic = topic.trim();
+        boolean found = false;
+        for (int i = 0; i < stopwatchRevisionTopicCombo.getItemCount(); i++) {
+            if (topic.equalsIgnoreCase(stopwatchRevisionTopicCombo.getItemAt(i))) {
+                stopwatchRevisionTopicCombo.setSelectedIndex(i);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            int count = stopwatchRevisionTopicCombo.getItemCount();
+            if (count > 0) {
+                stopwatchRevisionTopicCombo.insertItemAt(topic, count - 1);
+                stopwatchRevisionTopicCombo.setSelectedItem(topic);
+                saveCurrentRevisionTopics();
+            } else {
+                stopwatchRevisionTopicCombo.addItem(topic);
+                stopwatchRevisionTopicCombo.setSelectedItem(topic);
             }
         }
     }

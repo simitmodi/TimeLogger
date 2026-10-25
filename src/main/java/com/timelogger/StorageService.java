@@ -207,6 +207,33 @@ public class StorageService {
                 Files.write(pyqFile, Arrays.asList("General", "Practice", "Revision"), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             }
 
+            Path revisionFile = getRevisionTopicsFile();
+            if (!Files.exists(revisionFile)) {
+                List<String> defaultTopics = new ArrayList<>();
+                defaultTopics.add("General");
+                defaultTopics.add("Theory Revision");
+                defaultTopics.add("Formula Revision");
+                defaultTopics.add("Short Notes");
+                
+                // Automatically populate existing revision topics from sessions.log
+                List<SessionRecord> existingSessions = loadSessions();
+                for (SessionRecord s : existingSessions) {
+                    if (s.getSubject() != null && !s.getSubject().trim().isEmpty()) {
+                        String desc = s.getDescription();
+                        if (desc != null && desc.startsWith("Revision: ")) {
+                            String topic = desc.substring("Revision: ".length()).trim();
+                            if (!topic.isEmpty()) {
+                                String entry = s.getSubject().trim() + ":" + topic;
+                                if (!defaultTopics.contains(entry)) {
+                                    defaultTopics.add(entry);
+                                }
+                            }
+                        }
+                    }
+                }
+                Files.write(revisionFile, defaultTopics, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            }
+
             performAutoBackup();
             migrateLegacyTopics();
         } catch (IOException e) {
@@ -561,6 +588,166 @@ public class StorageService {
             } catch (Exception ignored) {}
         }
         props.setProperty(type + "_" + subject, desc);
+        try (java.io.Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            props.store(writer, null);
+        } catch (Exception ignored) {}
+    }
+
+    public Path getRevisionTopicsFile() {
+        return appDirectory.resolve("revision_topics.txt");
+    }
+
+    public List<String> extractRevisionTopicsFromLogs(String subject) {
+        List<String> topics = new ArrayList<>();
+        List<SessionRecord> sessions = loadSessions();
+        for (SessionRecord s : sessions) {
+            if (s.getSubject() != null && s.getSubject().equalsIgnoreCase(subject)) {
+                String desc = s.getDescription();
+                if (desc != null && desc.startsWith("Revision: ")) {
+                    String rTopic = desc.substring("Revision: ".length()).trim();
+                    if (!rTopic.isEmpty() && !topics.contains(rTopic)) {
+                        topics.add(rTopic);
+                    }
+                }
+            }
+        }
+        return topics;
+    }
+
+    public List<String> loadRevisionTopics(String subject) {
+        Path file = getRevisionTopicsFile();
+        try {
+            List<String> topicsForSubject = new ArrayList<>();
+            List<String> allLines = new ArrayList<>();
+            if (Files.exists(file)) {
+                allLines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            } else {
+                allLines.addAll(Arrays.asList("General", "Theory Revision", "Formula Revision", "Short Notes"));
+            }
+
+            for (String line : allLines) {
+                String trim = line.trim();
+                if (trim.isEmpty()) continue;
+                int colonIdx = trim.indexOf(":");
+                if (colonIdx != -1) {
+                    String sub = trim.substring(0, colonIdx).trim();
+                    String top = trim.substring(colonIdx + 1).trim();
+                    if (sub.equalsIgnoreCase(subject) && !topicsForSubject.contains(top)) {
+                        topicsForSubject.add(top);
+                    }
+                } else {
+                    // Predefined / legacy topic without subject - show for all subjects
+                    if (!topicsForSubject.contains(trim)) {
+                        topicsForSubject.add(trim);
+                    }
+                }
+            }
+
+            // Also check logged sessions for any already logged topics
+            List<String> logTopics = extractRevisionTopicsFromLogs(subject);
+            boolean changed = false;
+            for (String lt : logTopics) {
+                boolean exists = false;
+                for (String t : topicsForSubject) {
+                    if (t.equalsIgnoreCase(lt)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    topicsForSubject.add(lt);
+                    changed = true;
+                }
+            }
+
+            if (changed || !Files.exists(file)) {
+                saveRevisionTopics(subject, topicsForSubject);
+            }
+
+            return topicsForSubject;
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to read revision topics", e);
+        }
+    }
+
+    public void saveRevisionTopics(String subject, List<String> topics) {
+        Path file = getRevisionTopicsFile();
+        List<String> allLines = new ArrayList<>();
+        if (Files.exists(file)) {
+            try {
+                allLines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            } catch (IOException ignored) {}
+        }
+        
+        List<String> preservedLines = new ArrayList<>();
+        // Preserve lines not matching this subject
+        for (String line : allLines) {
+            String trim = line.trim();
+            if (trim.isEmpty()) continue;
+            int colonIdx = trim.indexOf(":");
+            if (colonIdx != -1) {
+                String sub = trim.substring(0, colonIdx).trim();
+                if (!sub.equalsIgnoreCase(subject)) {
+                    preservedLines.add(trim);
+                }
+            } else {
+                // Keep predefined lines without a subject
+                preservedLines.add(trim);
+            }
+        }
+        
+        // Add new topics formatted as "Subject:Topic"
+        for (String top : topics) {
+            String cleanTop = top.trim();
+            if (!cleanTop.isEmpty()) {
+                // If it's one of the generic predefined topics without subject, keep as is, otherwise prefix subject
+                if (cleanTop.equalsIgnoreCase("General") || cleanTop.equalsIgnoreCase("Theory Revision")
+                        || cleanTop.equalsIgnoreCase("Formula Revision") || cleanTop.equalsIgnoreCase("Short Notes")) {
+                    if (!preservedLines.contains(cleanTop)) {
+                        preservedLines.add(cleanTop);
+                    }
+                } else {
+                    preservedLines.add(subject + ":" + cleanTop);
+                }
+            }
+        }
+        
+        List<String> cleaned = preservedLines.stream()
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .distinct()
+            .collect(Collectors.toList());
+        try {
+            Files.write(file, cleaned, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to save revision topics", e);
+        }
+    }
+
+    public String loadLastRevisionTopic(String subject) {
+        Path file = appDirectory.resolve("last_question_descs.properties");
+        if (!Files.exists(file)) {
+            return "";
+        }
+        java.util.Properties props = new java.util.Properties();
+        try (java.io.Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            props.load(reader);
+            return props.getProperty("Revision_" + subject, props.getProperty("Revision", ""));
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public void saveLastRevisionTopic(String subject, String topic) {
+        Path file = appDirectory.resolve("last_question_descs.properties");
+        java.util.Properties props = new java.util.Properties();
+        if (Files.exists(file)) {
+            try (java.io.Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                props.load(reader);
+            } catch (Exception ignored) {}
+        }
+        props.setProperty("Revision_" + subject, topic);
         try (java.io.Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             props.store(writer, null);
         } catch (Exception ignored) {}

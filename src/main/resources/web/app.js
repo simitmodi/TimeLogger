@@ -82,6 +82,7 @@
   const btnRefreshAnalysis = document.getElementById('btnRefreshAnalysis');
   const analysisSessionTypeFilter = document.getElementById('analysisSessionTypeFilter');
   const analysisActivitySubjectFilter = document.getElementById('analysisActivitySubjectFilter');
+  const analysisRevisionSubjectFilter = document.getElementById('analysisRevisionSubjectFilter');
   const analysisQuestionsSubjectFilter = document.getElementById('analysisQuestionsSubjectFilter');
   const analysisQuestionsTopicFilter = document.getElementById('analysisQuestionsTopicFilter');
 
@@ -198,12 +199,12 @@
   }
 
   function populateSubjectDropdowns() {
-    const fills = [swSubject, timerSubject, logsSubjectFilter, analysisActivitySubjectFilter, analysisQuestionsSubjectFilter];
+    const fills = [swSubject, timerSubject, logsSubjectFilter, analysisActivitySubjectFilter, analysisRevisionSubjectFilter, analysisQuestionsSubjectFilter];
     fills.forEach(sel => {
       if (!sel) return;
       const current = sel.value;
       sel.innerHTML = '';
-      if (sel === logsSubjectFilter || sel === analysisActivitySubjectFilter || sel === analysisQuestionsSubjectFilter) {
+      if (sel === logsSubjectFilter || sel === analysisActivitySubjectFilter || sel === analysisRevisionSubjectFilter || sel === analysisQuestionsSubjectFilter) {
         sel.innerHTML = '<option value="All Subjects">All Subjects</option>';
       }
       subjects.forEach(s => {
@@ -272,11 +273,37 @@
     }
   }
 
+  async function loadRevisionTopics(subject) {
+    if (!subject) return;
+    try {
+      const res = await fetch(`/api/revision-topics?subject=${encodeURIComponent(subject)}`);
+      const data = await res.json();
+      swRevisionTopic.innerHTML = '';
+      data.topics.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        swRevisionTopic.appendChild(opt);
+      });
+      const addOpt = document.createElement('option');
+      addOpt.value = '__ADD_NEW__';
+      addOpt.textContent = '[Add Custom...]';
+      swRevisionTopic.appendChild(addOpt);
+
+      if (data.lastTopic && data.topics.includes(data.lastTopic)) {
+        swRevisionTopic.value = data.lastTopic;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   // --- Controls & Activity Type Switching ---
   function initControls() {
     swSubject.addEventListener('change', () => {
       swSubjectDisplay.textContent = 'Subject: ' + swSubject.value;
       loadQuestionTopics(swQuestionType.value, swSubject.value);
+      loadRevisionTopics(swSubject.value);
       updateStopwatchDetailSuggestions();
     });
 
@@ -298,6 +325,7 @@
         swLectureGroup.classList.remove('hidden');
       } else if (val === 'Revision') {
         swRevisionGroup.classList.remove('hidden');
+        loadRevisionTopics(swSubject.value);
       } else {
         swGeneralGroup.classList.remove('hidden');
       }
@@ -319,6 +347,22 @@
           }).then(() => loadQuestionTopics(swQuestionType.value, swSubject.value));
         } else {
           swQuestionTopic.selectedIndex = 0;
+        }
+      }
+    });
+
+    swRevisionTopic.addEventListener('change', () => {
+      if (swRevisionTopic.value === '__ADD_NEW__') {
+        const newTopic = prompt("Enter new revision topic name:");
+        if (newTopic && newTopic.trim()) {
+          const val = newTopic.trim();
+          fetch('/api/revision-topics', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({subject: swSubject.value, topic: val})
+          }).then(() => loadRevisionTopics(swSubject.value));
+        } else {
+          swRevisionTopic.selectedIndex = 0;
         }
       }
     });
@@ -397,6 +441,7 @@
     if (btnRefreshAnalysis) btnRefreshAnalysis.addEventListener('click', renderAnalysis);
     if (analysisSessionTypeFilter) analysisSessionTypeFilter.addEventListener('change', renderAnalysis);
     if (analysisActivitySubjectFilter) analysisActivitySubjectFilter.addEventListener('change', renderAnalysis);
+    if (analysisRevisionSubjectFilter) analysisRevisionSubjectFilter.addEventListener('change', renderAnalysis);
     if (analysisQuestionsSubjectFilter) analysisQuestionsSubjectFilter.addEventListener('change', renderAnalysis);
     if (analysisQuestionsTopicFilter) analysisQuestionsTopicFilter.addEventListener('change', renderAnalysis);
 
@@ -477,7 +522,10 @@
     let actDetail = '';
     if (actType === 'General') actDetail = swActivityDetail.value.trim();
     else if (actType === 'Lecture') actDetail = `Lecture: Ch ${swLectureChapter.value.trim()}, Lec ${swLectureNum.value.trim()}`;
-    else if (actType === 'Revision') actDetail = `Revision: ${swRevisionTopic.value.trim()}`;
+    else if (actType === 'Revision') {
+      const rTopic = swRevisionTopic.value === '__ADD_NEW__' ? '' : swRevisionTopic.value;
+      actDetail = `Revision: ${rTopic}`;
+    }
     else if (actType === 'Questions') {
       const qType = swQuestionType.value;
       const qDesc = swQuestionTopic.value === '__ADD_NEW__' ? '' : swQuestionTopic.value;
@@ -1287,6 +1335,7 @@
 
     // 7. Activity Breakdown Table (Filtered by analysisActivitySubjectFilter)
     const actSubFilter = analysisActivitySubjectFilter ? analysisActivitySubjectFilter.value : "All Subjects";
+    const revSubFilter = analysisRevisionSubjectFilter ? analysisRevisionSubjectFilter.value : "All Subjects";
     let dppSec = 0, practiceSec = 0, pyqSec = 0, revSec = 0, genSec = 0;
     let dppQ = 0, practiceQ = 0, pyqQ = 0;
     const byRevTopic = {};
@@ -1346,10 +1395,13 @@
         }
       } else if (desc.startsWith("Revision: ")) {
         if (matchesActSub) {
+          revSec += sec;
+        }
+        const matchesRevSub = (revSubFilter === "All Subjects" || s.subject.toLowerCase() === revSubFilter.toLowerCase());
+        if (matchesRevSub) {
           let topic = desc.substring("Revision: ".length()).trim();
           if (!topic) topic = "General/Unnamed";
           byRevTopic[topic] = (byRevTopic[topic] || 0) + sec;
-          revSec += sec;
         }
       } else if (!desc.startsWith("Lecture: ")) {
         if (matchesActSub) {
@@ -1401,7 +1453,7 @@
       tr.innerHTML = `<td><b>${topic}</b></td><td>${formatDuration(sec)}</td>`;
       tr.addEventListener('dblclick', () => {
         const matches = filteredSessions.filter(s => {
-          if (actSubFilter !== "All Subjects" && s.subject.toLowerCase() !== actSubFilter.toLowerCase()) return false;
+          if (revSubFilter !== "All Subjects" && s.subject.toLowerCase() !== revSubFilter.toLowerCase()) return false;
           const desc = s.description || "";
           if (!desc.startsWith("Revision: ")) return false;
           let t = desc.substring("Revision: ".length()).trim();
@@ -2024,7 +2076,10 @@
         swQuestionsGroup.classList.add('hidden');
         swLectureGroup.classList.add('hidden');
         swRevisionGroup.classList.remove('hidden');
-        swRevisionTopic.value = desc.substring("Revision: ".length()).trim();
+        const rTopic = desc.substring("Revision: ".length()).trim();
+        loadRevisionTopics(subject).then(() => {
+          if (rTopic) swRevisionTopic.value = rTopic;
+        });
       } else {
         swActivityType.value = "General";
         swGeneralGroup.classList.remove('hidden');
