@@ -102,6 +102,7 @@ public class AppFrame extends JFrame {
     private final JLabel stopwatchSubjectLabel = new JLabel("Subject: -", SwingConstants.CENTER);
     private final JLabel stopwatchDetailLabel = new JLabel(" ", SwingConstants.CENTER);
     private final JLabel stopwatchStatsLabel = new JLabel("Today: 0m • Pauses: 0", SwingConstants.CENTER);
+    private final JLabel stopwatchTargetCountdownLabel = new JLabel("0d 0h 0m 0s left for 06 Feb 2026", SwingConstants.CENTER);
     private final ChronographDialPanel chronographDialPanel = new ChronographDialPanel();
     private final JPanel stopwatchCenterCard = new JPanel(new java.awt.CardLayout());
     private final ModernButton stopwatchStyleToggleButton = new ModernButton("Analog", ModernButton.ButtonStyle.STANDARD);
@@ -337,6 +338,10 @@ public class AppFrame extends JFrame {
         // Apply saved theme on startup
         updateTheme(ThemeManager.loadTheme());
 
+        updateTargetDateCountdown();
+        Timer targetCountdownTimer = new Timer(1000, e -> updateTargetDateCountdown());
+        targetCountdownTimer.start();
+
         initSystemTray();
 
         // Heartbeat timer every 5 seconds to persist active session state
@@ -425,7 +430,8 @@ public class AppFrame extends JFrame {
         for (java.awt.Component child : container.getComponents()) {
             if (child instanceof JLabel) {
                 if (child != stopwatchSubjectLabel && child != stopwatchTimeLabel && child != timerTimeLabel
-                    && child != stopwatchDetailLabel && child != stopwatchStatsLabel && child != timerSubjectLabel && child != timerStatsLabel) {
+                    && child != stopwatchDetailLabel && child != stopwatchStatsLabel && child != stopwatchTargetCountdownLabel
+                    && child != timerSubjectLabel && child != timerStatsLabel) {
                     child.setFont(labelFont);
                 }
             } else if (child instanceof JComboBox || child instanceof JTextField || child instanceof JSpinner) {
@@ -512,26 +518,29 @@ public class AppFrame extends JFrame {
     private void updateTimeLabelsFontSize() {
         int w = getWidth();
         int h = getHeight();
-        int size = Math.max(64, Math.min(w / 10, h / 5));
+        int size = Math.max(80, Math.min(w / 8, h / 4));
         Font f = new Font("Segoe UI", Font.BOLD, size);
         stopwatchTimeLabel.setFont(f);
         timerTimeLabel.setFont(f);
 
-        int subjectLabelSize = Math.max(16, Math.min(w / 50, h / 30));
+        int subjectLabelSize = Math.max(18, Math.min(w / 45, h / 26));
         Font subjFont = new Font("Segoe UI", Font.BOLD, subjectLabelSize);
         stopwatchSubjectLabel.setFont(subjFont);
         timerSubjectLabel.setFont(subjFont);
 
-        int detailLabelSize = Math.max(12, Math.min(w / 65, h / 42));
+        int detailLabelSize = Math.max(13, Math.min(w / 60, h / 38));
         Font detailFont = new Font("Segoe UI", Font.PLAIN, detailLabelSize);
         stopwatchDetailLabel.setFont(detailFont);
 
-        int statsLabelSize = Math.max(11, Math.min(w / 70, h / 46));
+        int statsLabelSize = Math.max(12, Math.min(w / 65, h / 42));
         Font statsFont = new Font("Segoe UI Semibold", Font.PLAIN, statsLabelSize);
         stopwatchStatsLabel.setFont(statsFont);
         timerStatsLabel.setFont(statsFont);
 
-        int dialSize = Math.max(310, Math.min(w / 3, h / 2));
+        int countdownLabelSize = Math.max(13, Math.min(w / 55, h / 36));
+        stopwatchTargetCountdownLabel.setFont(new Font("Segoe UI Semibold", Font.PLAIN, countdownLabelSize));
+
+        int dialSize = Math.min(800, Math.max(400, Math.min((int)(w * 0.55), (int)(h * 0.68))));
         chronographDialPanel.setPreferredSize(new Dimension(dialSize, dialSize));
 
         // Scale config font size
@@ -673,7 +682,17 @@ public class AppFrame extends JFrame {
         stopwatchConfigPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         stopwatchConfigPanel.setOpaque(false);
         stopwatchConfigPanel.add(card);
-        JPanel config = stopwatchConfigPanel;
+
+        JPanel northPanel = new JPanel(new BorderLayout(0, 8));
+        northPanel.setOpaque(false);
+
+        JPanel countdownWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        countdownWrapper.setOpaque(false);
+        countdownWrapper.add(stopwatchTargetCountdownLabel);
+        northPanel.add(countdownWrapper, BorderLayout.NORTH);
+        northPanel.add(stopwatchConfigPanel, BorderLayout.CENTER);
+
+        JPanel config = northPanel;
 
         JPanel generalCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         generalCard.setOpaque(false);
@@ -945,17 +964,17 @@ public class AppFrame extends JFrame {
         JPanel centerPanel = new JPanel(new GridBagLayout());
         ModernCardPanel heroCard = new ModernCardPanel(16);
         heroCard.setLayout(new GridBagLayout());
-        heroCard.setBorder(BorderFactory.createEmptyBorder(16, 32, 16, 32));
+        heroCard.setBorder(BorderFactory.createEmptyBorder(10, 24, 10, 24));
 
         GridBagConstraints gbcHero = new GridBagConstraints();
         gbcHero.gridx = 0;
         gbcHero.gridy = 0;
-        gbcHero.insets = new Insets(2, 0, 2, 0);
+        gbcHero.insets = new Insets(1, 0, 1, 0);
         gbcHero.anchor = GridBagConstraints.CENTER;
         heroCard.add(stopwatchSubjectLabel, gbcHero);
 
         gbcHero.gridy = 1;
-        gbcHero.insets = new Insets(0, 0, 6, 0);
+        gbcHero.insets = new Insets(0, 0, 4, 0);
         heroCard.add(stopwatchDetailLabel, gbcHero);
 
         stopwatchCenterCard.setOpaque(false);
@@ -963,11 +982,11 @@ public class AppFrame extends JFrame {
         stopwatchCenterCard.add(chronographDialPanel, "ANALOG");
 
         gbcHero.gridy = 2;
-        gbcHero.insets = new Insets(4, 0, 6, 0);
+        gbcHero.insets = new Insets(2, 0, 4, 0);
         heroCard.add(stopwatchCenterCard, gbcHero);
 
         gbcHero.gridy = 3;
-        gbcHero.insets = new Insets(2, 0, 2, 0);
+        gbcHero.insets = new Insets(1, 0, 2, 0);
         heroCard.add(stopwatchStatsLabel, gbcHero);
 
         GridBagConstraints gbcCent = new GridBagConstraints();
@@ -3030,6 +3049,8 @@ public class AppFrame extends JFrame {
             stopwatchCenterCard.repaint();
         }
 
+        updateTimeLabelsFontSize();
+
         if (isAnalog && stopwatchRunning) {
             stopwatchUiTimer.setDelay(30);
         } else {
@@ -4099,10 +4120,43 @@ public class AppFrame extends JFrame {
         ThemeManager.saveTheme(theme);
         ThemeManager.ThemeColors colors = ThemeManager.getColors(theme);
         ThemeManager.applyTheme(this, colors);
+        updateTargetDateCountdown();
         if (aiChatLogPane != null) {
             rebuildChatHtml();
         }
         this.repaint();
+    }
+
+    private void updateTargetDateCountdown() {
+        LocalDateTime now = LocalDateTime.now();
+        // Target date: 6th Feb
+        LocalDateTime target2026 = LocalDateTime.of(2026, 2, 6, 0, 0, 0);
+        LocalDateTime target2027 = LocalDateTime.of(2027, 2, 6, 0, 0, 0);
+        LocalDateTime target = now.isAfter(target2026) ? target2027 : target2026;
+
+        java.time.Duration duration = java.time.Duration.between(now, target);
+        long totalSeconds = Math.max(0, duration.getSeconds());
+
+        long days = totalSeconds / 86400;
+        long hours = (totalSeconds % 86400) / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+
+        String formattedTarget = target.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy"));
+        String text = String.format("%dd %dh %dm %ds left for %s", days, hours, minutes, seconds, formattedTarget);
+        stopwatchTargetCountdownLabel.setText(text);
+
+        ThemeManager.ThemeColors colors = ThemeManager.getColors(ThemeManager.loadTheme());
+        boolean isDark = (ThemeManager.loadTheme() == ThemeManager.AppTheme.DARK 
+                       || ThemeManager.loadTheme() == ThemeManager.AppTheme.HIGH_CONTRAST);
+        Color iconColor = isDark ? new Color(255, 179, 71) : new Color(210, 105, 30);
+        stopwatchTargetCountdownLabel.setIcon(new TargetBullseyeIcon(iconColor));
+        stopwatchTargetCountdownLabel.setIconTextGap(6);
+        if (isDark) {
+            stopwatchTargetCountdownLabel.setForeground(iconColor); // Warm amber/orange
+        } else {
+            stopwatchTargetCountdownLabel.setForeground(iconColor); // Deep amber/chocolate
+        }
     }
 
     // --- Excel-like Filtering and Sorting helpers ---
@@ -6645,6 +6699,42 @@ public class AppFrame extends JFrame {
         public int getIconWidth() { return 13; }
         @Override
         public int getIconHeight() { return 15; }
+    }
+
+    private static class TargetBullseyeIcon implements javax.swing.Icon {
+        private final Color ringColor;
+
+        public TargetBullseyeIcon(Color ringColor) {
+            this.ringColor = ringColor;
+        }
+
+        @Override
+        public void paintIcon(java.awt.Component c, java.awt.Graphics g, int x, int y) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+
+            Color base = (ringColor != null) ? ringColor : c.getForeground();
+            int cx = x + 7;
+            int cy = y + 7;
+
+            // Outer ring
+            g2.setColor(base);
+            g2.setStroke(new java.awt.BasicStroke(1.5f));
+            g2.drawOval(cx - 6, cy - 6, 12, 12);
+
+            // Inner ring
+            g2.drawOval(cx - 3, cy - 3, 6, 6);
+
+            // Center bullseye dot
+            g2.fillOval(cx - 1, cy - 1, 2, 2);
+
+            g2.dispose();
+        }
+
+        @Override
+        public int getIconWidth() { return 16; }
+        @Override
+        public int getIconHeight() { return 16; }
     }
 
     /**

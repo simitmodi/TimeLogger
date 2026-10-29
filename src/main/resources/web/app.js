@@ -37,6 +37,7 @@
   // Stopwatch elements
   const swClock = document.getElementById('stopwatchClock');
   const swSubjectDisplay = document.getElementById('stopwatchSubjectDisplay');
+  const swTargetCountdown = document.getElementById('swTargetCountdown');
   const swSubject = document.getElementById('swSubject');
   const swActivityType = document.getElementById('swActivityType');
   const swGeneralGroup = document.getElementById('swGeneralGroup');
@@ -187,6 +188,8 @@
       renderSubjectsList();
       renderLogs();
       updateGoalWidget();
+      updateTargetCountdown();
+      setInterval(updateTargetCountdown, 1000);
 
       // Check Active Session Recovery
       const actData = await actRes.json();
@@ -226,6 +229,25 @@
     if (timerSubject.value) {
       timerSubjectDisplay.textContent = 'Subject: ' + timerSubject.value;
     }
+  }
+
+  function updateTargetCountdown() {
+    if (!swTargetCountdown) return;
+    const now = new Date();
+    const target2026 = new Date(2026, 1, 6, 0, 0, 0); // Feb 6, 2026
+    const target2027 = new Date(2027, 1, 6, 0, 0, 0); // Feb 6, 2027
+    const target = now > target2026 ? target2027 : target2026;
+
+    const diffMs = Math.max(0, target.getTime() - now.getTime());
+    const totalSec = Math.floor(diffMs / 1000);
+
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+
+    const formattedTarget = target.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    swTargetCountdown.textContent = `🎯 ${days}d ${hours}h ${mins}m ${secs}s left for ${formattedTarget}`;
   }
 
   function updateStopwatchDetailSuggestions() {

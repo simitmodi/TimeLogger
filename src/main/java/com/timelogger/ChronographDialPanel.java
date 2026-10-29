@@ -39,8 +39,9 @@ public class ChronographDialPanel extends JPanel {
 
     public ChronographDialPanel() {
         setOpaque(false);
-        setPreferredSize(new Dimension(340, 340));
-        setMinimumSize(new Dimension(240, 240));
+        setPreferredSize(new Dimension(800, 800));
+        setMinimumSize(new Dimension(400, 400));
+        setMaximumSize(new Dimension(800, 800));
 
         // Periodic timer so current time hands advance even when stopwatch is stopped
         clockRefreshTimer = new javax.swing.Timer(1000, e -> repaint());

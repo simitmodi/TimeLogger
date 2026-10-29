@@ -258,6 +258,18 @@ body.theme-hc .topbar-btn.secondary {
   border: 1px solid var(--border-color);
 }
 
+.target-countdown-banner {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e67e22;
+  letter-spacing: 0.5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: rgba(230, 126, 34, 0.12);
+  border: 1px solid rgba(230, 126, 34, 0.25);
+  display: inline-block;
+}
+
 .config-grid {
   width: 100%;
   display: flex;
